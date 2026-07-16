@@ -132,9 +132,8 @@ export default function Dashboard() {
   // Robust automatic periodic polling (Vercel Compatibility Fallback)
   // Ensures that all users see updates eventually if sockets fail
   useEffect(() => {
-    // If socket is connected, poll very slowly (every 30 seconds) to save resources.
-    // If socket is disconnected (e.g. on Vercel), poll frequently (every 2.5 seconds) to ensure real-time sync.
-    const pollInterval = socketConnected ? 30000 : 2500;
+    // Poll frequently (every 2.0 seconds) to ensure real-time sync for spectators across different container instances
+    const pollInterval = 2000;
     let pollCount = 0;
 
     const interval = setInterval(() => {
@@ -144,9 +143,8 @@ export default function Dashboard() {
         fetchParticipants();
         
         pollCount++;
-        // Fetch logs and DB status less frequently (every 10 seconds on fallback, every 2 minutes on socket)
-        const statusPollCycle = socketConnected ? 4 : 4; 
-        if (pollCount % statusPollCycle === 0) {
+        // Fetch logs and DB status less frequently (every 10 seconds)
+        if (pollCount % 5 === 0) {
           fetchLogs();
           fetchDbStatus();
         }
@@ -154,7 +152,7 @@ export default function Dashboard() {
     }, pollInterval);
 
     return () => clearInterval(interval);
-  }, [socketConnected]);
+  }, []);
 
   // Automatic rotation of the QLED screen slideshow every 4.5 seconds
   useEffect(() => {

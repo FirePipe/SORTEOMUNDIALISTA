@@ -138,28 +138,42 @@ export default function PublicSection({ participants, eventState, appConfig }: P
           lastConfirmedKeyRef.current = lastStateKeyRef.current;
           
           stopFlashing();
-          setShowCelebration(true);
-          setIsRolling(false);
-          setRollingParticipantName(null);
-
-          if (appConfig.soundEnabled) {
-            audio.playBing();
-            audio.playSuccessFanfare();
-          }
 
           const winner = participants.find(
             p => p._id?.toString() === lastPartId || p.id?.toString() === lastPartId
           );
-          if (winner) {
-            setLastWinner({
-              nombre: winner.nombre,
-              apellido: winner.apellido,
-              equipo: winner.equipo || '',
-              area: winner.area || ''
-            });
-          }
-          if (lastNum) {
-            setLocalFlasher(lastNum);
+
+          // Verify if this was a confirmation (number actually assigned to the participant) or a reroll/discard
+          const isConfirmed = winner && winner.numeroAsignado === lastNum;
+
+          if (isConfirmed) {
+            setShowCelebration(true);
+            setIsRolling(false);
+            setRollingParticipantName(null);
+
+            if (appConfig.soundEnabled) {
+              audio.playBing();
+              audio.playSuccessFanfare();
+            }
+
+            if (winner) {
+              setLastWinner({
+                nombre: winner.nombre,
+                apellido: winner.apellido,
+                equipo: winner.equipo || '',
+                area: winner.area || ''
+              });
+            }
+            if (lastNum) {
+              setLocalFlasher(lastNum);
+            }
+          } else {
+            // It was a reroll/discard or cancelation
+            setShowCelebration(false);
+            setIsRolling(false);
+            setRollingParticipantName(null);
+            setLastWinner(null);
+            setLocalFlasher('??');
           }
         }
         lastStateKeyRef.current = null;
