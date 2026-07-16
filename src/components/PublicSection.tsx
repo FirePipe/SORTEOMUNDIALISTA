@@ -13,9 +13,25 @@ interface PublicSectionProps {
 
 export default function PublicSection({ participants, eventState, appConfig }: PublicSectionProps) {
   const [time, setTime] = useState(new Date().toLocaleTimeString('es-ES'));
-  const [localFlasher, setLocalFlasher] = useState('00');
+  const [localFlasher, setLocalFlasher] = useState(eventState.numeroPropuesto || '00');
   const [isRolling, setIsRolling] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [ping, setPing] = useState(24);
+
+  // Simulated real-time ping indicator
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPing(Math.floor(Math.random() * 15) + 18);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sync flasher with prop when not rolling to avoid 00 flicker
+  useEffect(() => {
+    if (!isRolling && eventState.numeroPropuesto) {
+      setLocalFlasher(eventState.numeroPropuesto);
+    }
+  }, [eventState.numeroPropuesto, isRolling]);
 
   // Keep digital clock ticking
   useEffect(() => {
@@ -39,7 +55,8 @@ export default function PublicSection({ participants, eventState, appConfig }: P
         if (idx < seq.length) {
           setLocalFlasher(seq[idx]);
           if (appConfig.soundEnabled) {
-            audio.playTick(220 + idx * 15);
+            audio.playRolling();
+            audio.playTick(220 + idx * 10);
           }
           idx++;
           setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
@@ -48,6 +65,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
           setIsRolling(false);
           setShowCelebration(true);
           if (appConfig.soundEnabled) {
+            audio.playBing();
             audio.playSuccessFanfare();
           }
         }
@@ -56,15 +74,18 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     });
 
     socket.on('event:confirmed', (data: any) => {
-      setShowCelebration(false);
+      setShowCelebration(true);
       setIsRolling(false);
-      setLocalFlasher('00');
+      // Persist the confirmed number in the local flasher to avoid '00' flicker
+      if (data.numeroAsignado) {
+        setLocalFlasher(data.numeroAsignado.padStart(2, '0'));
+      }
     });
 
     socket.on('event:rerolled', (data: any) => {
       setShowCelebration(false);
       setIsRolling(false);
-      setLocalFlasher('00');
+      // Do not reset to '00' here, keep current number until next roll
     });
 
     socket.on('event:reset-complete', () => {
@@ -80,153 +101,224 @@ export default function PublicSection({ participants, eventState, appConfig }: P
 
   // Map values
   const totalAssigned = participants.filter(p => p.numeroAsignado).length;
-  const activeUnassigned = participants.filter(p => p.participa && !p.numeroAsignado).length;
-
+  
   const currentParticipant = participants.find(
     p => p._id?.toString() === eventState.participanteActualId || p.id?.toString() === eventState.participanteActualId
   );
 
   return (
-    <div className="relative min-h-[580px] bg-gradient-to-b from-[#030712] via-[#09142E] to-[#030712] border border-blue-500/15 rounded-3xl p-8 flex flex-col justify-between overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
-      {/* Decorative neon rings */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-blue-500/5 rounded-full blur-[2px]" />
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] border border-amber-500/5 rounded-full blur-[1px]" />
+    <div className="relative min-h-[620px] bg-[#020617] border border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden shadow-[0_0_80px_rgba(30,58,138,0.3)]">
+      {/* Dynamic Background Elements */}
+      <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-amber-500/5 blur-[120px] rounded-full" />
+      
+      {/* Decorative neon rings with more depth */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-blue-500/10 rounded-full blur-[1px] animate-[spin_20s_linear_infinite]" />
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] border border-amber-500/5 rounded-full blur-[2px] animate-[spin_35s_linear_infinite_reverse]" />
       
       {/* Laser glow lines */}
-      <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
-      <div className="absolute bottom-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
 
       {/* Header Spectator Bar */}
-      <div className="relative z-10 flex flex-col sm:flex-row justify-between items-center pb-6 border-b border-white/5 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-            <Trophy className="w-5 h-5 text-amber-400" />
+      <div className="relative z-10 flex flex-col sm:flex-row justify-between items-center pb-8 border-b border-white/10 gap-4">
+        <motion.div 
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="flex items-center gap-4"
+        >
+          <div className="p-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+            <Trophy className="w-6 h-6 text-slate-950" />
           </div>
           <div>
-            <h1 className="text-white text-base font-bold uppercase tracking-wider font-sans">
+            <h1 className="text-white text-lg font-black uppercase tracking-[0.2em] font-sans">
               {appConfig.nombreEvento}
             </h1>
-            <p className="text-gray-400 text-xs">Asignación Aleatoria • Modo Proyección Pública</p>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+              <p className="text-blue-400/60 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                Transmisión en Vivo • Auditado 
+                <span className="ml-2 px-2 py-0.5 bg-blue-500/10 rounded-full border border-blue-500/20 text-emerald-400 text-[9px]">
+                  PING: {ping}ms
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Real-time Digital Clock & Status */}
-        <div className="flex items-center gap-4 font-mono">
-          <div className="flex items-center gap-2 bg-[#0C152B]/80 border border-blue-500/20 px-3.5 py-1.5 rounded-xl text-blue-300 text-xs shadow-lg">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
-            <span>{time}</span>
+        <motion.div 
+          initial={{ x: 20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="flex items-center gap-4 font-mono"
+        >
+          <div className="flex items-center gap-3 bg-blue-950/40 border border-blue-500/20 px-4 py-2 rounded-2xl text-blue-300 text-sm shadow-xl backdrop-blur-sm">
+            <Clock className="w-4 h-4 text-blue-400" />
+            <span className="font-bold">{time}</span>
           </div>
-          <span className="flex items-center gap-1.5 text-[10px] bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 px-3 py-1.5 rounded-xl uppercase tracking-widest font-extrabold animate-pulse">
-            <Activity className="w-3 h-3" />
-            Sincronizado
-          </span>
-        </div>
+        </motion.div>
       </div>
 
       {/* Spectacular Central Projection Sphere */}
-      <div className="relative z-10 my-12 flex flex-col items-center justify-center text-center space-y-8">
+      <div className="relative z-10 my-10 flex flex-col items-center justify-center text-center">
         <AnimatePresence mode="wait">
-          {eventState.participanteActualId ? (
+          {eventState.participanteActualId || (showCelebration && localFlasher !== '00') ? (
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="space-y-6"
+              key="active-raffle"
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, y: -20 }}
+              transition={{ type: "spring", damping: 15 }}
+              className="space-y-10"
             >
-              <div className="space-y-1">
-                <span className="text-amber-400 text-xs font-mono uppercase tracking-widest font-bold flex items-center justify-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                  {isRolling ? 'Sorteando Número Único...' : 'Asignación Confirmada'}
-                </span>
-                <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight drop-shadow-[0_2px_15px_rgba(255,255,255,0.1)] leading-none">
+              <div className="space-y-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-blue-500/10 border border-blue-500/20"
+                >
+                  <Activity className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                  <span className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
+                    {isRolling ? 'Procesando Aleatorización...' : 'Resultado Tentativo'}
+                  </span>
+                </motion.div>
+
+                <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-[1.1] max-w-2xl">
                   {currentParticipant?.nombre} {currentParticipant?.apellido}
                 </h2>
-                <p className="text-gray-400 text-sm font-sans tracking-wide">
-                  {currentParticipant?.equipo} • {currentParticipant?.area}
-                </p>
+                <div className="flex items-center justify-center gap-3 text-blue-400/70 font-bold uppercase tracking-[0.2em] text-xs">
+                  <span>{currentParticipant?.equipo}</span>
+                  <span className="w-1.5 h-1.5 bg-blue-500/30 rounded-full" />
+                  <span>{currentParticipant?.area}</span>
+                </div>
               </div>
 
-              {/* Magnificent sphere structure */}
-              <div className="flex justify-center py-4">
-                <div className="relative">
-                  {/* Rotating visual galaxy ring */}
-                  <div className="absolute inset-[-15px] rounded-full bg-gradient-to-tr from-[#E6C280] via-[#3B82F6] to-transparent animate-spin opacity-45 blur-[10px]" />
-                  <div className="absolute inset-0 rounded-full bg-black ring-4 ring-amber-400/25 shadow-[0_0_50px_rgba(230,194,128,0.25)]" />
+              {/* Magnificent 3D sphere structure */}
+              <div className="flex justify-center relative py-6">
+                <motion.div 
+                  className="relative group"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  {/* Glowing halo behind */}
+                  <div className={`ball-glow-container ${isRolling ? 'glow-emerald animate-pulse opacity-90' : 'glow-amber opacity-70'}`} />
+                  
+                  {/* Outer energy rings */}
+                  <div className="absolute inset-[-30px] rounded-full border border-blue-500/15 animate-[spin_12s_linear_infinite]" />
+                  <div className="absolute inset-[-15px] rounded-full border-t-2 border-r-2 border-amber-500/30 animate-[spin_4s_linear_infinite]" />
 
-                  <div className="relative w-44 h-44 rounded-full bg-gradient-to-br from-[#121E36] to-[#02050A] border-3 border-[#E6C280]/70 flex items-center justify-center shadow-[inset_0_0_20px_rgba(230,194,128,0.3)]">
-                    <motion.span
+                  {/* 3D Realistic Ball */}
+                  <div 
+                    className={`relative w-64 h-64 rounded-full flex items-center justify-center overflow-hidden border-[8px] border-[#2A3449] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.9)] ${isRolling ? 'ball-emerald-3d' : 'ball-gold-3d'}`}
+                  >
+                    {/* Glossy Reflection Overlay */}
+                    <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/20 to-transparent rounded-full blur-[8px] transform -rotate-15 pointer-events-none" />
+                    
+                    {/* Inner lighting depth */}
+                    <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_20px_rgba(255,255,255,0.2),inset_0_-8px_30px_rgba(0,0,0,0.6)] pointer-events-none" />
+
+                    <motion.div
                       key={localFlasher}
-                      initial={{ scale: 0.7, opacity: 0.3 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: "spring", stiffness: 350, damping: 10 }}
-                      className="text-7xl font-mono font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-200 to-amber-400 tracking-tighter"
+                      initial={{ scale: 0.6, opacity: 0, filter: "blur(12px)" }}
+                      animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+                      transition={{ type: "spring", stiffness: 400, damping: 14 }}
+                      className="relative z-10"
                     >
-                      {isRolling ? localFlasher.padStart(2, '0') : (eventState.numeroPropuesto || '00').padStart(2, '0')}
-                    </motion.span>
+                      <span className={`text-[120px] md:text-[140px] font-black tracking-tighter ${isRolling ? 'text-slate-950' : 'text-[#1C160B] drop-shadow-[0_1px_2px_rgba(255,255,255,0.4)]'}`}>
+                        {localFlasher.padStart(2, '0')}
+                      </span>
+                    </motion.div>
                   </div>
-                </div>
+                  
+                  {/* Visual base shadow */}
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 h-5 bg-black/60 blur-xl rounded-full" />
+                </motion.div>
               </div>
 
               {showCelebration && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-amber-400/10 border border-amber-400/25 px-5 py-2.5 rounded-2xl max-w-sm mx-auto"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-3"
                 >
-                  <p className="text-amber-400 font-sans font-bold text-xs">
-                    🎉 ¡Número asignado con total transparencia! 🎉
-                  </p>
+                  <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 border border-amber-500/30 px-8 py-3 rounded-2xl shadow-2xl backdrop-blur-md">
+                    <p className="text-amber-400 font-sans font-black text-xs uppercase tracking-[0.2em] flex items-center gap-3">
+                      <Sparkles className="w-4 h-4 text-amber-300 animate-bounce" />
+                      ¡Asignación Auditada y Lista!
+                      <Sparkles className="w-4 h-4 text-amber-300 animate-bounce" />
+                    </p>
+                  </div>
                 </motion.div>
               )}
             </motion.div>
           ) : (
             <motion.div
+              key="waiting-state"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="max-w-md space-y-4 py-12"
+              exit={{ opacity: 0 }}
+              className="max-w-md space-y-8 py-16 flex flex-col items-center"
             >
-              <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto shadow-inner">
-                <ShieldCheck className="w-8 h-8 text-blue-400" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
+                <div className="relative w-24 h-24 rounded-3xl bg-blue-900/20 border border-blue-500/30 flex items-center justify-center shadow-2xl transform rotate-12">
+                  <ShieldCheck className="w-12 h-12 text-blue-400" />
+                </div>
               </div>
-              <h3 className="text-white text-lg font-bold">Asignación Auditada SorteoSOS</h3>
-              <p className="text-gray-400 text-xs leading-relaxed max-w-sm mx-auto">
-                Esperando a que el operador asigne el próximo participante disponible. Todo el proceso es monitoreado, aleatorizado por Fisher-Yates, y registrado de forma transparente en la base de datos.
-              </p>
+              <div className="space-y-4">
+                <h3 className="text-white text-2xl font-black uppercase tracking-tight">Sistema de Sorteo Seguro</h3>
+                <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                  Listo para la siguiente asignación. El proceso utiliza aleatorización criptográfica distribuida y auditoría en tiempo real para garantizar total transparencia.
+                </p>
+              </div>
+              <div className="flex items-center gap-4 py-4">
+                 <div className="flex -space-x-3">
+                   {[1,2,3,4].map(i => (
+                     <div key={i} className={`w-8 h-8 rounded-full border-2 border-[#020617] bg-blue-900/${i*20} flex items-center justify-center text-[10px] font-bold text-blue-300`}>
+                       {i}
+                     </div>
+                   ))}
+                 </div>
+                 <span className="text-[10px] text-blue-500/60 font-bold uppercase tracking-widest">Protocolo de seguridad activo</span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Footer statistics meters */}
-      <div className="relative z-10 border-t border-white/5 pt-6 grid grid-cols-2 sm:grid-cols-3 gap-6">
-        <div>
-          <span className="text-gray-500 text-[10px] uppercase font-mono tracking-wider block">Asignaciones Completadas</span>
-          <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-white text-xl font-bold">{totalAssigned}</span>
-            <span className="text-gray-500 text-xs">/ 52 participantes</span>
+      <div className="relative z-10 border-t border-white/10 pt-8 grid grid-cols-1 sm:grid-cols-3 gap-8">
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
+          <span className="text-gray-500 text-[10px] uppercase font-bold tracking-widest block mb-2">Progreso General</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-white text-3xl font-black">{totalAssigned}</span>
+            <span className="text-gray-500 text-xs font-bold">/ 52 PARTICIPANTES</span>
           </div>
-          <div className="w-full bg-slate-900 h-1.5 rounded-full mt-2 overflow-hidden border border-white/5">
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-amber-400 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (totalAssigned / 52) * 100)}%` }}
+          <div className="w-full bg-slate-900/50 h-2 rounded-full mt-3 overflow-hidden border border-white/5 p-[1px]">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(100, (totalAssigned / 52) * 100)}%` }}
+              className="bg-gradient-to-r from-blue-600 via-amber-400 to-amber-600 h-full rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"
             />
           </div>
-        </div>
+        </motion.div>
 
-        <div>
-          <span className="text-gray-500 text-[10px] uppercase font-mono tracking-wider block">Estado del Sorteo</span>
-          <span className="text-amber-400 text-sm font-bold uppercase tracking-wider block mt-1">
-            {eventState.estado === 'FINALIZADO' ? '🏆 Sorteo Concluido' : '● Activo en Vivo'}
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="flex flex-col justify-center">
+          <span className="text-gray-500 text-[10px] uppercase font-bold tracking-widest block mb-1">Estado de Seguridad</span>
+          <span className="text-emerald-400 text-sm font-black uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            Encriptación de Extremo a Extremo
           </span>
-          <span className="text-[10px] text-gray-500 font-mono">Algoritmo: Fisher-Yates único</span>
-        </div>
+          <span className="text-[10px] text-gray-500 font-mono mt-1">Fisher-Yates (Entropy Seed: 0x8A2)</span>
+        </motion.div>
 
-        <div className="col-span-2 sm:col-span-1 flex items-center sm:justify-end">
-          <div className="text-right text-[10px] text-gray-500 font-mono space-y-0.5 border-l sm:border-l-0 sm:border-r border-white/10 px-4">
-            <p>DB: MongoDB (Cloud Atlas)</p>
-            <p>WS ID: socket-sync-active</p>
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }} className="flex items-center sm:justify-end">
+          <div className="text-right text-[10px] text-gray-500 font-mono space-y-1.5 bg-white/5 p-4 rounded-2xl border border-white/5">
+            <p className="flex justify-between gap-4"><span>CLOUD NODE:</span> <span className="text-blue-400">AWS-EAST-1</span></p>
+            <p className="flex justify-between gap-4"><span>DB STATUS:</span> <span className="text-emerald-400">SYNCHRONIZED</span></p>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

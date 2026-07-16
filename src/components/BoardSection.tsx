@@ -32,7 +32,8 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
   const numbers = Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, '0'));
 
   const assignedCount = assignmentsMap.size;
-  const availableCount = 99 - assignedCount;
+  const totalParticipantsCount = participants.length;
+  const pendingCount = totalParticipantsCount - assignedCount;
 
   // Process & Sort list of assigned participants or all participants
   const processedParticipants = React.useMemo(() => {
@@ -74,8 +75,11 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-[#0C152B]/60 backdrop-blur-xl border border-blue-500/20 p-4 rounded-xl flex items-center justify-between shadow-lg shadow-blue-950/20">
           <div>
-            <p className="text-gray-400 text-xs font-mono uppercase tracking-widest">Números Disponibles</p>
-            <p className="text-2xl font-bold text-blue-400 font-sans mt-1">{availableCount} <span className="text-sm font-normal text-gray-500">/ 99</span></p>
+            <p className="text-gray-400 text-[10px] font-mono uppercase tracking-widest font-bold">Cupos Pendientes</p>
+            <p className="text-2xl font-bold text-blue-400 font-sans mt-1">
+              {pendingCount} 
+              <span className="text-sm font-normal text-gray-500 ml-1">/ {totalParticipantsCount}</span>
+            </p>
           </div>
           <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
             <HelpCircle className="w-5 h-5 text-blue-400" />
@@ -84,8 +88,11 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
 
         <div className="bg-[#1C160B]/60 backdrop-blur-xl border border-amber-500/20 p-4 rounded-xl flex items-center justify-between shadow-lg shadow-amber-950/20">
           <div>
-            <p className="text-amber-200/60 text-xs font-mono uppercase tracking-widest">Números Asignados</p>
-            <p className="text-2xl font-bold text-amber-400 font-sans mt-1">{assignedCount} <span className="text-sm font-normal text-gray-500">/ 99</span></p>
+            <p className="text-amber-200/60 text-[10px] font-mono uppercase tracking-widest font-bold">Cupos Confirmados</p>
+            <p className="text-2xl font-bold text-amber-400 font-sans mt-1">
+              {assignedCount} 
+              <span className="text-sm font-normal text-gray-500 ml-1">/ {totalParticipantsCount}</span>
+            </p>
           </div>
           <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
             <CheckCircle className="w-5 h-5 text-amber-400" />
@@ -94,9 +101,9 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
 
         <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/30 p-4 rounded-xl flex items-center justify-between shadow-lg">
           <div>
-            <p className="text-gray-400 text-xs font-mono uppercase tracking-widest">Porcentaje Asignado</p>
+            <p className="text-gray-400 text-[10px] font-mono uppercase tracking-widest font-bold">Progreso Total</p>
             <p className="text-2xl font-bold text-white mt-1">
-              {((assignedCount / 99) * 100).toFixed(1)}%
+              {totalParticipantsCount > 0 ? ((assignedCount / totalParticipantsCount) * 100).toFixed(1) : '0.0'}%
             </p>
           </div>
           <div className="h-10 w-10 rounded-full bg-slate-700/20 flex items-center justify-center border border-slate-700/30">
@@ -195,16 +202,23 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
               </div>
             </div>
 
-            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 xl:grid-cols-12 gap-3.5 justify-center">
-              {numbers.map((num) => {
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 xl:grid-cols-12 gap-3.5 justify-center"
+            >
+              {numbers.map((num, idx) => {
                 const assignedParticipant = assignmentsMap.get(num);
                 const isAssigned = !!assignedParticipant;
                 const isRollingActive = currentProposedNumber === num;
 
                 return (
-                  <div
+                  <motion.div
                     key={num}
-                    className="relative group flex justify-center"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: idx * 0.005, type: "spring", stiffness: 260, damping: 20 }}
+                    className="relative group flex justify-center items-center w-12 h-12"
                     onMouseEnter={() => setHoveredNumber(num)}
                     onMouseLeave={() => setHoveredNumber(null)}
                   >
@@ -217,11 +231,11 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
                       whileHover={{ scale: 1.18, zIndex: 10 }}
                       transition={{ type: "spring", stiffness: 450, damping: 14 }}
                       className={`
-                        w-12 h-12 rounded-full flex items-center justify-center font-mono text-[15px] font-extrabold transition-all duration-300 cursor-pointer select-none relative overflow-hidden
+                        w-full h-full rounded-full flex items-center justify-center font-mono text-[15px] font-extrabold transition-all duration-300 cursor-pointer select-none relative overflow-hidden z-10
                         ${isRollingActive
-                          ? 'ball-emerald-3d text-slate-950 animate-pulse ring-4 ring-emerald-500/25'
+                          ? 'ball-emerald-3d text-slate-950 animate-pulse ring-2 ring-emerald-400/20'
                           : isAssigned
-                            ? 'ball-gold-3d text-[#1C160B] z-10'
+                            ? 'ball-gold-3d text-[#1C160B]'
                             : 'bg-gradient-to-br from-[#101E35] via-[#091120] to-[#040810] text-blue-300/80 border border-blue-500/20 shadow-[0_3px_6px_rgba(0,0,0,0.4),_inset_0_-3px_5px_rgba(0,0,0,0.75),_inset_0_3px_5px_rgba(255,255,255,0.1)] hover:text-white hover:border-blue-400 hover:shadow-[0_0_15px_rgba(59,130,246,0.5),_inset_0_-3px_5px_rgba(0,0,0,0.6)]'
                         }
                       `}
@@ -240,17 +254,31 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
                       <span className={isAssigned ? 'drop-shadow-[0_1px_1.5px_rgba(255,255,255,0.55)] font-black text-amber-950 text-base z-10' : 'drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]'}>
                         {num}
                       </span>
+                    </motion.div>
+
+                    {/* Radial Glow Container - Perfect circle centering */}
+                    {isAssigned && !isRollingActive && (
+                      <div className="ball-glow-container glow-amber" />
+                    )}
+                    {isRollingActive && (
+                      <div className="ball-glow-container glow-emerald animate-pulse" />
+                    )}
+                    {hoveredNumber === num && !isAssigned && !isRollingActive && (
+                      <div className="ball-glow-container glow-blue" />
+                    )}
 
                       {isAssigned && assignedParticipant && (
                         <span className="absolute bottom-1 right-1 bg-[#1C160B]/90 text-amber-300 border border-amber-500/40 text-[8px] font-sans font-extrabold px-1 rounded shadow-md pointer-events-none scale-90 z-10">
                           {assignedParticipant.nombre[0]}{assignedParticipant.apellido[0]}
                         </span>
                       )}
-                    </motion.div>
 
                     {hoveredNumber === num && isAssigned && assignedParticipant && (
-                      <div className="absolute z-50 bottom-full mb-3 w-64 bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.6)] backdrop-blur-md text-left pointer-events-none transform -translate-x-1/2 left-1/2 animate-fade-in">
-                        <div className="absolute bottom-[-6px] left-1/2 transform -translate-x-1/2 rotate-45 w-3 h-3 bg-slate-950 border-r border-b border-amber-500/40" />
+                      <div className={`
+                        absolute z-50 bottom-full mb-3 w-64 bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.6)] backdrop-blur-md text-left pointer-events-none animate-fade-in
+                        ${(num % 12 === 1 || num % 12 === 2) ? 'left-0' : (num % 12 === 0 || num % 12 === 11) ? 'right-0' : 'left-1/2 -translate-x-1/2'}
+                      `}>
+                        <div className={`absolute bottom-[-6px] w-3 h-3 bg-slate-950 border-r border-b border-amber-500/40 rotate-45 ${(num % 12 === 1 || num % 12 === 2) ? 'left-4' : (num % 12 === 0 || num % 12 === 11) ? 'right-4' : 'left-1/2 -translate-x-1/2'}`} />
                         <div className="flex items-start justify-between mb-1.5 pb-1 border-b border-white/10">
                           <p className="text-amber-400 text-[10px] font-mono uppercase tracking-widest font-bold">Número Confirmado: {num}</p>
                           {assignedParticipant.pago ? (
@@ -268,10 +296,10 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
                         </div>
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
-            </div>
+            </motion.div>
           </div>
         )}
 

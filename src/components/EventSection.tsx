@@ -41,13 +41,22 @@ export default function EventSection({
   
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
-  const [flashNumber, setFlashNumber] = useState('00');
+  const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '00');
   const [confettiActive, setConfettiActive] = useState(false);
+
+  // Sync flashNumber with prop when not flashing to avoid 00 flicker
+  useEffect(() => {
+    if (!isFlashing && eventState.numeroPropuesto) {
+      setFlashNumber(eventState.numeroPropuesto);
+    }
+  }, [eventState.numeroPropuesto, isFlashing]);
   const [showRerollConfirm, setShowRerollConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const [isSequentialActive, setIsSequentialActive] = useState(false);
   const isSequentialActiveRef = useRef(false);
+  const [drawStrategy, setDrawStrategy] = useState<'sequential' | 'random'>('sequential');
+  const drawStrategyRef = useRef<'sequential' | 'random'>('sequential');
 
   // States to track sequential drawing details
   const [seqStep, setSeqStep] = useState<'idle' | 'selecting' | 'rolling' | 'celebrating' | 'pausing' | 'confirming'>('idle');
@@ -156,6 +165,7 @@ export default function EventSection({
             setFlashNumber(currentNum);
             
             if (appConfig.soundEnabled) {
+              audio.playRolling();
               const pitch = 220 + (flashIdx * 20);
               audio.playTick(pitch);
             }
@@ -168,6 +178,7 @@ export default function EventSection({
             setIsFlashing(false);
             
             if (appConfig.soundEnabled) {
+              audio.playBing();
               audio.playSuccessFanfare();
             }
             setConfettiActive(true);
@@ -228,8 +239,17 @@ export default function EventSection({
 
     const run = async () => {
       while (isSequentialActiveRef.current && isMounted) {
-        // 1. Find next unassigned participant
-        const nextParticipant = participants.find(p => p.participa && !p.numeroAsignado);
+        // 1. Find next unassigned participant based on strategy
+        let nextParticipant: Participant | undefined;
+        
+        if (drawStrategyRef.current === 'random') {
+          const available = participants.filter(p => p.participa && !p.numeroAsignado);
+          if (available.length > 0) {
+            nextParticipant = available[Math.floor(Math.random() * available.length)];
+          }
+        } else {
+          nextParticipant = participants.find(p => p.participa && !p.numeroAsignado);
+        }
         
         // If there is an active participant already that hasn't been confirmed yet
         if (eventState.participanteActualId && eventState.numeroPropuesto) {
@@ -515,26 +535,31 @@ export default function EventSection({
                   </p>
                 </div>
 
-                {/* Spectacular glowing sphere */}
-                <div className="flex justify-center py-4">
-                  <div className="relative">
-                    {/* Ring glow halo */}
-                    <div className="absolute inset-[-12px] rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-blue-500 animate-spin opacity-55 blur-[8px]" />
-                    <div className="absolute inset-0 rounded-full bg-black ring-4 ring-amber-400/30" />
-                    
-                    <div className="relative w-36 h-36 rounded-full bg-gradient-to-br from-[#1C160B] to-[#03060C] border-2 border-amber-300/60 shadow-[0_0_35px_rgba(230,194,128,0.5)] flex items-center justify-center">
-                      <motion.span
-                        key={flashNumber}
-                        initial={{ scale: 0.75, opacity: 0.5 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ type: "spring", stiffness: 350, damping: 10 }}
-                        className="text-6xl font-extrabold font-mono text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-200 to-amber-400"
-                      >
-                        {flashNumber.padStart(2, '0')}
-                      </motion.span>
-                    </div>
-                  </div>
-                </div>
+        {/* Spectacular glowing sphere */}
+        <div className="flex justify-center py-4">
+          <div className="relative group">
+            {/* Ring glow halo */}
+            <div className={`ball-glow-container ${isFlashing ? 'glow-emerald animate-pulse opacity-80' : 'glow-amber opacity-60'}`} />
+            
+            <div className={`relative w-40 h-40 rounded-full flex items-center justify-center overflow-hidden border-[6px] border-[#2A3449] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] ${isFlashing ? 'ball-emerald-3d' : 'ball-gold-3d'}`}>
+              {/* Glossy Reflection Overlay */}
+              <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/20 to-transparent rounded-full blur-[5px] transform -rotate-15 pointer-events-none" />
+              
+              <motion.span
+                key={flashNumber}
+                initial={{ scale: 0.7, opacity: 0.5, filter: "blur(4px)" }}
+                animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+                transition={{ type: "spring", stiffness: 450, damping: 12 }}
+                className={`text-7xl font-black font-mono tracking-tighter ${isFlashing ? 'text-slate-900' : 'text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.3)]'}`}
+              >
+                {flashNumber.padStart(2, '0')}
+              </motion.span>
+            </div>
+
+            {/* Reflection base shadow */}
+            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-28 h-3 bg-black/40 blur-md rounded-full" />
+          </div>
+        </div>
               </motion.div>
             ) : (
               <motion.div
@@ -705,9 +730,31 @@ export default function EventSection({
                 </span>
                 <h4 className="text-white font-black text-xl flex items-center justify-center md:justify-start gap-2">
                   <Sparkles className={`w-5.5 h-5.5 text-amber-400 ${isSequentialActive ? 'animate-spin' : ''}`} />
-                  Sorteo Automático Secuencial Inteligente
+                  Sorteo Automático 1-a-1
                 </h4>
-                <p className="text-gray-400 text-xs">
+                <div className="flex gap-2 mt-2">
+                  <button
+                    disabled={isSequentialActive}
+                    onClick={() => {
+                      setDrawStrategy('sequential');
+                      drawStrategyRef.current = 'sequential';
+                    }}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'sequential' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-gray-500 border border-white/5'}`}
+                  >
+                    Orden de Lista
+                  </button>
+                  <button
+                    disabled={isSequentialActive}
+                    onClick={() => {
+                      setDrawStrategy('random');
+                      drawStrategyRef.current = 'random';
+                    }}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'random' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-gray-500 border border-white/5'}`}
+                  >
+                    Orden Aleatorio
+                  </button>
+                </div>
+                <p className="text-gray-400 text-xs mt-2">
                   El sistema avanzará uno a uno garantizando que <span className="text-amber-300 font-semibold">los números nunca se repitan</span>. Introducirá pausas visuales estratégicas para que puedas verificar el resultado en el panel antes de confirmarlo.
                 </p>
               </div>

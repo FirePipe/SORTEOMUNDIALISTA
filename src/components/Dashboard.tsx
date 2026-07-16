@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Participant, EventState, AppConfig, AuditLog } from '../types';
+import { audio } from '../utils/audio';
 import BoardSection from './BoardSection';
 import TableSection from './TableSection';
 import EventSection from './EventSection';
@@ -314,6 +315,7 @@ export default function Dashboard() {
   };
 
   const handleRerollNumber = async () => {
+    if (appConfig.soundEnabled) audio.playWhoosh();
     const res = await fetch('/api/event/reroll', {
       method: 'POST',
       headers: {
@@ -324,6 +326,7 @@ export default function Dashboard() {
   };
 
   const handleConfirmNumber = async () => {
+    if (appConfig.soundEnabled) audio.playConfirm();
     const res = await fetch('/api/event/confirm', {
       method: 'POST',
       headers: {
@@ -516,6 +519,32 @@ export default function Dashboard() {
               transition={{ duration: 0.25, ease: "easeOut" }}
               className="space-y-10"
             >
+              {/* Thank You Note Section */}
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 relative overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                <div className="flex items-start gap-4">
+                  <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                    <Users className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      ¡Gracias por hacer esto posible, Equipo! 💙
+                    </h3>
+                    <p className="text-gray-300 text-xs leading-relaxed font-medium italic">
+                      "Queremos agradecer de corazón a cada uno de ustedes por sumarse al recaudo para el televisor de 50 pulgadas".
+                      <br /><br />
+                      Más allá de quién se lleve el premio a casa (¡mucha suerte a todos! 🍀), lo realmente valioso ha sido demostrar, una vez más, la fuerza y la unión que nos caracteriza como Gestión de Ingresos.
+                      <br /><br />
+                      Que este gran ambiente de compañerismo sea el impulso para seguir integrándonos y creciendo juntos en muchas más actividades. ¡Somos un gran equipo! 🚀🤝"
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+
               {/* Main Prize Feature Panel */}
               <div className="relative overflow-hidden bg-gradient-to-b from-[#0C152B] via-[#050D1C] to-[#040810] border border-amber-500/20 rounded-3xl p-6 md:p-10 shadow-2xl">
                 <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
@@ -659,83 +688,128 @@ export default function Dashboard() {
               </div>
 
               {/* Sorteo Oficial & Dinámica del Juego Cards */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Dynamic Card: Sorteo Oficial */}
-                <div className="lg:col-span-7 bg-gradient-to-b from-[#070D19]/90 to-[#040810] border border-blue-500/10 rounded-2xl p-6.5 shadow-xl space-y-4">
-                  <span className="inline-flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono text-[9px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">
-                    🎰 SISTEMA DE JUEGO OFICIAL
-                  </span>
-                  <h4 className="text-white font-extrabold text-lg uppercase tracking-wide">
-                    Sorteo Oficial • SIENTE LA PASIÓN
-                  </h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Participas de forma automática por la compra de tu boleto registrado en nuestra base de datos. La rifa juega con las cifras finales del sorteo oficial del <span className="text-amber-400 font-bold">Chontico Noche</span> todas las noches, garantizando absoluta transparencia e imparcialidad pública.
-                  </p>
-
-                  {/* Statistics Cards mini-row */}
-                  <div className="grid grid-cols-2 gap-4 pt-3">
-                    <div className="bg-[#0B1528] border border-blue-500/20 p-3.5 rounded-xl">
-                      <span className="text-gray-400 text-[10px] font-mono uppercase">Participantes Activos</span>
-                      <p className="text-2xl font-black text-white mt-1">52</p>
-                      <span className="text-[10px] text-emerald-400 font-mono">100% Verificados</span>
+                <motion.div 
+                  whileHover={{ y: -5 }}
+                  className="lg:col-span-7 bg-gradient-to-br from-[#0C152B] to-[#040810] border border-blue-500/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-500/20 transition-all" />
+                  
+                  <div className="relative z-10 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                        <Cpu className="w-6 h-6 text-blue-400" />
+                      </div>
+                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
+                        ESTÁNDAR GLOBAL
+                      </span>
                     </div>
-                    <div className="bg-[#1C160B] border border-[#E6C280]/20 p-3.5 rounded-xl">
-                      <span className="text-[#E6C280]/70 text-[10px] font-mono uppercase">Fecha de Inicio</span>
-                      <p className="text-sm font-black text-[#E6C280] mt-2">Martes 21 de Julio</p>
-                      <span className="text-[10px] text-gray-400 font-mono">Con el Chontico Noche</span>
+
+                    <h4 className="text-2xl md:text-3xl font-black text-white tracking-tight uppercase">
+                      🎰 SISTEMA DE JUEGO OFICIAL
+                    </h4>
+                    
+                    <p className="text-gray-300 text-sm md:text-base leading-relaxed font-medium">
+                      Participas de forma automática por la compra de tu boleto registrado en nuestra base de datos. La rifa juega con las cifras finales del sorteo oficial del <span className="text-amber-400 font-bold underline decoration-amber-400/30 underline-offset-4">Chontico Noche</span> todas las noches, garantizando absoluta transparencia e imparcialidad pública.
+                    </p>
+
+                    {/* Statistics Cards mini-row */}
+                    <div className="grid grid-cols-2 gap-5 pt-4">
+                      <div className="bg-[#0B1528]/80 backdrop-blur-sm border border-blue-500/20 p-5 rounded-2xl shadow-inner">
+                        <span className="text-gray-400 text-[10px] font-mono uppercase font-bold tracking-wider">Participantes Activos</span>
+                        <p className="text-3xl font-black text-white mt-1.5 flex items-baseline gap-1">
+                          {totalCount}
+                          <span className="text-xs text-blue-400/60 font-mono">USUARIOS</span>
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold">SINCRO TOTAL</span>
+                        </div>
+                      </div>
+                      <div className="bg-[#1C160B]/80 backdrop-blur-sm border border-[#E6C280]/20 p-5 rounded-2xl shadow-inner">
+                        <span className="text-[#E6C280]/70 text-[10px] font-mono uppercase font-bold tracking-wider">Fecha de Juego</span>
+                        <p className="text-lg font-black text-[#E6C280] mt-1.5 leading-tight">Martes 21 de Julio</p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <Calendar className="w-3 h-3 text-gray-500" />
+                          <span className="text-[10px] text-gray-400 font-mono">Inicia 8:00 PM</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Right Dynamic Card: Dinámica del Sorteo */}
-                <div className="lg:col-span-5 bg-gradient-to-b from-[#070D19]/90 to-[#040810] border border-amber-500/10 rounded-2xl p-6.5 shadow-xl space-y-4">
-                  <span className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-[#E6C280] font-mono text-[9px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">
-                    ℹ️ REGLAMENTO Y CONDICIONES
-                  </span>
-                  <h4 className="text-white font-extrabold text-lg uppercase tracking-wide">
-                    Dinámica del Sorteo
-                  </h4>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-mono text-xs text-blue-400 font-bold mt-0.5">1</div>
-                      <div>
-                        <p className="text-white text-xs font-bold">Últimas 2 Cifras</p>
-                        <p className="text-gray-400 text-[11px] mt-0.5">El ganador se define única y exclusivamente con las cifras finales del sorteo de Chontico Noche.</p>
+                <motion.div 
+                  whileHover={{ y: -5 }}
+                  className="lg:col-span-5 bg-gradient-to-br from-[#1C160B] to-[#040810] border border-amber-500/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-amber-500/20 transition-all" />
+
+                  <div className="relative z-10 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                        <Layers className="w-6 h-6 text-amber-400" />
                       </div>
+                      <span className="bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
+                        GUÍA TÉCNICA
+                      </span>
                     </div>
 
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-xs text-amber-400 font-bold mt-0.5">2</div>
-                      <div>
-                        <p className="text-white text-xs font-bold">Sorteo Garantizado (Hasta que caiga)</p>
-                        <p className="text-gray-400 text-[11px] mt-0.5">Jugamos de manera continua cada noche hasta que el número extraído coincida exactamente con un participante activo.</p>
+                    <h4 className="text-2xl font-black text-white tracking-tight uppercase">
+                      ℹ️ REGLAMENTO Y CONDICIONES
+                    </h4>
+                    
+                    <div className="space-y-5 pt-2">
+                      <div className="flex items-start gap-4 p-4 bg-black/40 rounded-2xl border border-white/5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-mono text-sm text-blue-400 font-black shadow-lg">1</div>
+                        <div className="space-y-1">
+                          <p className="text-white text-sm font-black uppercase tracking-wide">Últimas 2 Cifras</p>
+                          <p className="text-gray-400 text-xs leading-relaxed">El ganador se define única y exclusivamente con las cifras finales del sorteo de Chontico Noche.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4 p-4 bg-black/40 rounded-2xl border border-white/5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-sm text-amber-400 font-black shadow-lg">2</div>
+                        <div className="space-y-1">
+                          <p className="text-white text-sm font-black uppercase tracking-wide">Sorteo Garantizado</p>
+                          <p className="text-gray-400 text-xs leading-relaxed">Jugamos cada noche hasta que el número extraído coincida exactamente con un participante registrado.</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
 
               {/* Live Progress Bar HUD */}
-              <div className="bg-[#070D19]/60 border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-5">
-                <div className="space-y-1 w-full md:w-2/3">
-                  <div className="flex justify-between items-center text-xs font-mono text-gray-400">
-                    <span>Porcentaje de Números Asignados a Participantes:</span>
-                    <span className="text-amber-400 font-bold">{assignedCount} de 99 ({Math.round((assignedCount / 99) * 100)}%)</span>
+              <div className="bg-[#070D19]/60 border border-white/5 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-sm">
+                <div className="space-y-2 w-full md:w-2/3">
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className="text-gray-400 font-bold uppercase tracking-widest">Progreso de Asignación a Participantes:</span>
+                    <span className="text-amber-400 font-black text-sm">
+                      {assignedCount} / {totalCount} ({totalCount > 0 ? Math.round((assignedCount / totalCount) * 100) : 0}%)
+                    </span>
                   </div>
-                  <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-white/5 p-0.5">
-                    <div 
-                      className="bg-gradient-to-r from-amber-400 via-[#E6C280] to-amber-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(230,194,128,0.4)]"
-                      style={{ width: `${(assignedCount / 99) * 100}%` }}
+                  <div className="w-full bg-slate-950 h-4 rounded-full overflow-hidden border border-white/10 p-1">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${totalCount > 0 ? (assignedCount / totalCount) * 100 : 0}%` }}
+                      className="bg-gradient-to-r from-amber-600 via-[#E6C280] to-amber-400 h-full rounded-full transition-all duration-700 shadow-[0_0_15px_rgba(230,194,128,0.5)]"
                     />
                   </div>
+                  <p className="text-[10px] text-gray-500 font-mono italic">
+                    * Métrica calculada en base a los {totalCount} participantes registrados actualmente.
+                  </p>
                 </div>
 
-                <div className="bg-slate-950 border border-amber-500/20 px-5 py-3 rounded-xl text-center w-full md:w-auto">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block">Números Libres</span>
-                  <span className="text-xl font-mono font-black text-amber-400">{99 - assignedCount}</span>
+                <div className="bg-slate-950/80 border-2 border-amber-500/20 px-8 py-4 rounded-2xl text-center w-full md:w-auto shadow-2xl">
+                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest font-black block mb-1">Cupos Pendientes</span>
+                  <span className="text-3xl font-mono font-black text-amber-400 tracking-tighter">
+                    {totalCount - assignedCount}
+                  </span>
                 </div>
               </div>
+
             </motion.div>
           )}
 

@@ -400,6 +400,13 @@ if (MONGODB_URI) {
   useLocalFile = true;
 }
 
+// Simple In-Memory Cache for high-frequency reads (socket broadcasts)
+let cacheParticipants: any[] | null = null;
+let cacheState: any | null = null;
+let cacheConfig: any | null = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 1500; // 1.5 seconds
+
 // Exported DB interface
 export const db = {
   isLocal: () => useLocalFile,
@@ -425,29 +432,40 @@ export const db = {
   async getParticipants() {
     await ensureConnected();
     if (useLocalFile) return localStore.getParticipants();
-    return await ParticipantModel.find({});
+    
+    if (cacheParticipants && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+      return cacheParticipants;
+    }
+    
+    cacheParticipants = await ParticipantModel.find({});
+    cacheTimestamp = Date.now();
+    return cacheParticipants;
   },
 
   async addParticipant(p: any) {
     await ensureConnected();
+    cacheParticipants = null; // Invalidate
     if (useLocalFile) return localStore.addParticipant(p);
     return await ParticipantModel.create(p);
   },
 
   async updateParticipant(id: string, update: any) {
     await ensureConnected();
+    cacheParticipants = null; // Invalidate
     if (useLocalFile) return localStore.updateParticipant(id, update);
     return await ParticipantModel.findByIdAndUpdate(id, update, { new: true });
   },
 
   async deleteParticipant(id: string) {
     await ensureConnected();
+    cacheParticipants = null; // Invalidate
     if (useLocalFile) return localStore.deleteParticipant(id);
     return await ParticipantModel.findByIdAndDelete(id);
   },
 
   async saveParticipantsBulk(list: any[]) {
     await ensureConnected();
+    cacheParticipants = null; // Invalidate
     if (useLocalFile) {
       localStore.setParticipants(list);
       return;
@@ -465,12 +483,8 @@ export const db = {
 
   async addLog(log: any) {
     await ensureConnected();
-    const payload = {
-      ...log,
-      fecha: new Date().toISOString()
-    };
-    if (useLocalFile) return localStore.addLog(payload);
-    return await LogModel.create(payload);
+    if (useLocalFile) return localStore.addLog(log);
+    return await LogModel.create({ ...log, fecha: new Date().toISOString() });
   },
 
   async clearLogs() {
@@ -482,6 +496,11 @@ export const db = {
   async getState() {
     await ensureConnected();
     if (useLocalFile) return localStore.getState();
+    
+    if (cacheState && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+      return cacheState;
+    }
+
     let st = await StateModel.findOne({});
     if (!st) {
       st = await StateModel.create({
@@ -493,11 +512,13 @@ export const db = {
         descartadosEnEsteIntento: []
       });
     }
+    cacheState = st;
     return st;
   },
 
   async updateState(update: Partial<IState>) {
     await ensureConnected();
+    cacheState = null; // Invalidate
     if (useLocalFile) return localStore.updateState(update);
     let st = await StateModel.findOne({});
     if (!st) {
@@ -511,6 +532,11 @@ export const db = {
   async getConfig() {
     await ensureConnected();
     if (useLocalFile) return localStore.getConfig();
+
+    if (cacheConfig && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+      return cacheConfig;
+    }
+
     let cfg = await ConfigModel.findOne({});
     if (!cfg) {
       cfg = await ConfigModel.create({
@@ -520,11 +546,13 @@ export const db = {
         nombreEvento: "Sorteo Oficial de Números SorteoSOS"
       });
     }
+    cacheConfig = cfg;
     return cfg;
   },
 
   async updateConfig(update: Partial<IConfig>) {
     await ensureConnected();
+    cacheConfig = null; // Invalidate
     if (useLocalFile) return localStore.updateConfig(update);
     let cfg = await ConfigModel.findOne({});
     if (!cfg) {
@@ -537,6 +565,8 @@ export const db = {
 
   async resetAll() {
     await ensureConnected();
+    cacheParticipants = null;
+    cacheState = null;
     if (useLocalFile) {
       localStore.resetAll();
       return;
