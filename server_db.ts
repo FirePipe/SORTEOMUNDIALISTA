@@ -14,11 +14,17 @@ if (MONGODB_URI.includes("@cluster0.1rnexaj@cluster0.1rnexaj.mongodb.net")) {
 
 let useLocalFile = true;
 
-const LOCAL_DB_PATH = path.join(process.cwd(), "data", "sorteo_db.json");
+const isVercel = !!(process.env.VERCEL || process.env.NOW_REGION || process.env.LAMBDA_TASK_ROOT);
+const LOCAL_DB_DIR = isVercel ? "/tmp" : path.join(process.cwd(), "data");
+const LOCAL_DB_PATH = path.join(LOCAL_DB_DIR, "sorteo_db.json");
 
-// Ensure data folder exists
-if (!fs.existsSync(path.dirname(LOCAL_DB_PATH))) {
-  fs.mkdirSync(path.dirname(LOCAL_DB_PATH), { recursive: true });
+// Ensure data folder exists (only if not on Vercel or if we really need it)
+if (!isVercel && !fs.existsSync(LOCAL_DB_DIR)) {
+  try {
+    fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
+  } catch (err) {
+    console.error("Failed to create data directory:", err);
+  }
 }
 
 // Interfaces for our database
