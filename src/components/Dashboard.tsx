@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { 
   Trophy, Users, Calendar, HelpCircle, LayoutDashboard, 
   TableProperties, Disc, LogOut, ShieldCheck, Play, Eye, Terminal, Lock,
-  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon
+  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon, Home
 } from 'lucide-react';
 
 const CAROUSEL_IMAGES = [
@@ -480,53 +480,53 @@ export default function Dashboard() {
           </div>
 
           {/* Nav Menu Tabs */}
-          <nav className="flex items-center gap-1 bg-slate-100 dark:bg-[#0B1528] p-1 border border-slate-200 dark:border-blue-500/10 rounded-xl overflow-x-auto max-w-full transition-colors duration-300">
+          <nav className="flex items-center gap-1 bg-slate-100 dark:bg-[#0B1528] p-1 border border-slate-200 dark:border-blue-500/10 rounded-xl max-w-full transition-colors duration-300">
             <button
               onClick={() => setActiveTab('inicio')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'inicio' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center cursor-pointer transition-all ${activeTab === 'inicio' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3.5' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+              title="Inicio"
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              Inicio
+              <Home className="w-4 h-4" />
             </button>
             <button
               onClick={() => setActiveTab('tablero')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'tablero' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'tablero' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Disc className="w-3.5 h-3.5" />
-              Tablero
+              <span>Tablero</span>
             </button>
             {token && (
               <button
                 onClick={() => setActiveTab('participantes')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'participantes' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'participantes' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
                 <TableProperties className="w-3.5 h-3.5" />
-                Participantes
+                <span>Lista</span>
               </button>
             )}
             {token && (
               <button
                 onClick={() => setActiveTab('evento')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'evento' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'evento' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
-                <Play className="w-3.5 h-3.5" />
-                Sorteo Vivo
+                <Play className="w-3.5 h-3.5 text-current" />
+                <span>Sorteo</span>
               </button>
             )}
             <button
               onClick={() => setActiveTab('publico')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Eye className="w-3.5 h-3.5" />
-              Proyectar
+              <span>Proyectar</span>
             </button>
             {token && (
               <button
                 onClick={() => setActiveTab('logs')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'logs' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'logs' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
                 <Terminal className="w-3.5 h-3.5" />
-                Auditoría
+                <span>Auditoría</span>
               </button>
             )}
           </nav>

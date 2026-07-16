@@ -99,6 +99,26 @@ export default function EventSection({
     seqSpeedModeRef.current = seqSpeedMode;
   }, [seqSpeedMode]);
 
+  const isFlashingRef = useRef(isFlashing);
+  useEffect(() => {
+    isFlashingRef.current = isFlashing;
+  }, [isFlashing]);
+
+  const isRelanzandoRef = useRef(isRelanzando);
+  useEffect(() => {
+    isRelanzandoRef.current = isRelanzando;
+  }, [isRelanzando]);
+
+  const seqPauseRef = useRef(seqPause);
+  useEffect(() => {
+    seqPauseRef.current = seqPause;
+  }, [seqPause]);
+
+  const showRerollConfirmRef = useRef(showRerollConfirm);
+  useEffect(() => {
+    showRerollConfirmRef.current = showRerollConfirm;
+  }, [showRerollConfirm]);
+
   const rerollTriggeredRef = useRef<boolean>(false);
 
   // List of active participants who still do not have an assigned number
@@ -178,9 +198,10 @@ export default function EventSection({
   // Run single randomized drawing wrapped in a Promise
   const triggerRollPromise = (participantId: string): Promise<string> => {
     return new Promise(async (resolve, reject) => {
-      if (isFlashing) return reject("Already rolling");
+      if (isFlashing || isFlashingRef.current) return reject("Already rolling");
       
       setIsFlashing(true);
+      isFlashingRef.current = true;
       setConfettiActive(false);
       
       // Start dummy flashing immediately to avoid "frozen" feeling
@@ -226,6 +247,7 @@ export default function EventSection({
             // Final lock: Use chosenNumber directly
             setFlashNumber(chosenNumber);
             setIsFlashing(false);
+            isFlashingRef.current = false;
             
             if (appConfig.soundEnabled) {
               audio.playBing();
@@ -241,6 +263,7 @@ export default function EventSection({
         isWaitingForAPI = false;
         if (flashIntervalRef.current) clearTimeout(flashIntervalRef.current);
         setIsFlashing(false);
+        isFlashingRef.current = false;
         setFlashNumber('??');
         reject(e);
       }
@@ -276,11 +299,12 @@ export default function EventSection({
 
   const handleReroll = async () => {
     try {
-      if (isFlashing) return;
+      if (isFlashing || isFlashingRef.current) return;
       const currentParticipantId = selectedParticipantId || eventState.participanteActualId;
       if (!currentParticipantId) return;
 
       setIsRelanzando(true);
+      isRelanzandoRef.current = true;
       setShowRerollConfirm(false);
       
       // Set reroll flag to let the sequential loop know to restart its countdown
@@ -296,8 +320,10 @@ export default function EventSection({
       // Trigger immediately with the locked participant ID
       await handleTriggerRoll(currentParticipantId);
       setIsRelanzando(false);
+      isRelanzandoRef.current = false;
     } catch (e) {
       setIsRelanzando(false);
+      isRelanzandoRef.current = false;
       rerollTriggeredRef.current = false;
       console.error(e);
     }
@@ -326,6 +352,9 @@ export default function EventSection({
           express: { nameRead: 400, celebrate: 500, countdown: 0, rest: 200 }
         }[mode] || { nameRead: 2500, celebrate: 2500, countdown: 4, rest: 2000 };
 
+        // Post-draw wait time in seconds (determined by admin-configured seqPause)
+        const countdownSeconds = Math.ceil(seqPauseRef.current / 1000);
+
         // 1. Check if there is an active participant already that hasn't been confirmed yet
         // Access via Ref to avoid dependency loop
         const currentEventState = eventStateRef.current;
@@ -339,25 +368,50 @@ export default function EventSection({
           setFlashNumber(currentEventState.numeroPropuesto);
           
           // Pause and countdown for confirmation
-          if (currentSpeeds.countdown > 0) {
+          if (countdownSeconds > 0) {
             setSeqStep('pausing');
-            for (let i = currentSpeeds.countdown; i > 0; i--) {
+            for (let i = countdownSeconds; i > 0; i--) {
               if (!isSequentialActiveRef.current || !isMounted) return;
 
-              // If a reroll was triggered during this wait, reset the countdown!
-              if (rerollTriggeredRef.current) {
+              setSeqCountdown(i);
+
+              // Wait 1 second in highly responsive 100ms segments
+              let rerollOccurred = false;
+              for (let ms = 0; ms < 10; ms++) {
+                await delay(100);
+                if (!isSequentialActiveRef.current || !isMounted) return;
+
+                if (rerollTriggeredRef.current) {
+                  rerollOccurred = true;
+                  break;
+                }
+
+                // If reroll modal is open, hold the timer indefinitely
+                while (showRerollConfirmRef.current) {
+                  await delay(100);
+                  if (!isSequentialActiveRef.current || !isMounted) return;
+                  if (rerollTriggeredRef.current) {
+                    rerollOccurred = true;
+                    break;
+                  }
+                }
+                if (rerollOccurred) break;
+              }
+
+              if (rerollOccurred || rerollTriggeredRef.current) {
                 rerollTriggeredRef.current = false;
-                const rollAnimTime = appConfig.tiempoAnimacion || 6000;
                 setSeqStep('rolling');
-                await delay(rollAnimTime + 200);
+                while (isFlashingRef.current || isRelanzandoRef.current) {
+                  await delay(100);
+                  if (!isSequentialActiveRef.current || !isMounted) return;
+                }
                 setSeqStep('celebrating');
                 await delay(currentSpeeds.celebrate);
                 setSeqStep('pausing');
-                i = currentSpeeds.countdown; // Reset the loop counter
+                // Reset loop index back to fresh configured wait time (+1 because the loop i-- decrements on next tick)
+                i = Math.ceil(seqPauseRef.current / 1000) + 1;
+                continue;
               }
-
-              setSeqCountdown(i);
-              await delay(1000);
             }
           }
           if (!isSequentialActiveRef.current || !isMounted) return;
@@ -368,7 +422,7 @@ export default function EventSection({
           // Add to local confirmed set
           confirmedInLoop.add(currentEventState.participanteActualId.toString());
 
-          await delay(seqPause); // Use configurable pause
+          await delay(1500); // A comfortable fixed rest space of 1.5s after confirming
           continue;
         }
 
@@ -430,25 +484,50 @@ export default function EventSection({
           if (!isMounted || !isSequentialActiveRef.current) return;
 
           // Pause and countdown (Verification pause)
-          if (currentSpeeds.countdown > 0) {
+          if (countdownSeconds > 0) {
             setSeqStep('pausing');
-            for (let i = currentSpeeds.countdown; i > 0; i--) {
+            for (let i = countdownSeconds; i > 0; i--) {
               if (!isSequentialActiveRef.current || !isMounted) return;
 
-              // If a reroll was triggered during this wait, reset the countdown!
-              if (rerollTriggeredRef.current) {
+              setSeqCountdown(i);
+
+              // Wait 1 second in highly responsive 100ms segments
+              let rerollOccurred = false;
+              for (let ms = 0; ms < 10; ms++) {
+                await delay(100);
+                if (!isSequentialActiveRef.current || !isMounted) return;
+
+                if (rerollTriggeredRef.current) {
+                  rerollOccurred = true;
+                  break;
+                }
+
+                // If reroll modal is open, hold the timer indefinitely
+                while (showRerollConfirmRef.current) {
+                  await delay(100);
+                  if (!isSequentialActiveRef.current || !isMounted) return;
+                  if (rerollTriggeredRef.current) {
+                    rerollOccurred = true;
+                    break;
+                  }
+                }
+                if (rerollOccurred) break;
+              }
+
+              if (rerollOccurred || rerollTriggeredRef.current) {
                 rerollTriggeredRef.current = false;
-                const rollAnimTime = appConfig.tiempoAnimacion || 6000;
                 setSeqStep('rolling');
-                await delay(rollAnimTime + 200);
+                while (isFlashingRef.current || isRelanzandoRef.current) {
+                  await delay(100);
+                  if (!isSequentialActiveRef.current || !isMounted) return;
+                }
                 setSeqStep('celebrating');
                 await delay(currentSpeeds.celebrate);
                 setSeqStep('pausing');
-                i = currentSpeeds.countdown; // Reset the loop counter
+                // Reset loop index back to fresh configured wait time (+1 because the loop i-- decrements on next tick)
+                i = Math.ceil(seqPauseRef.current / 1000) + 1;
+                continue;
               }
-
-              setSeqCountdown(i);
-              await delay(1000);
             }
           }
           if (!isMounted || !isSequentialActiveRef.current) return;
@@ -461,7 +540,7 @@ export default function EventSection({
           confirmedInLoop.add(pId.toString());
 
           // Give resting breathing space
-          await delay(seqPause);
+          await delay(1500);
         } catch (err: any) {
           console.error("Error during sequential roll step:", err);
           const errMsg = err?.message || String(err);
@@ -509,7 +588,7 @@ export default function EventSection({
   return (
     <div className="space-y-6">
       {/* MongoDB Connection Status & Diagnostics Dashboard */}
-      <div className="bg-[#070D19]/80 border border-blue-500/10 p-5 rounded-2xl shadow-xl backdrop-blur-xl space-y-4 relative overflow-hidden">
+      <div className="bg-white dark:bg-[#070D19]/80 border border-slate-200 dark:border-blue-500/10 p-5 rounded-2xl shadow-xl backdrop-blur-xl space-y-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-500/35 to-transparent" />
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -517,31 +596,31 @@ export default function EventSection({
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-white font-medium text-sm flex items-center gap-2">
+              <h3 className="text-slate-800 dark:text-white font-semibold text-sm flex items-center gap-2">
                 Conectividad de Base de Datos SorteoSOS
                 {dbStatus?.connected ? (
-                  <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     En Línea
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                  <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                     Almacenamiento Local
                   </span>
                 )}
               </h3>
-              <p className="text-gray-400 text-xs font-sans">Monitoreo de sincronización y estado del clúster remoto en MongoDB Atlas</p>
+              <p className="text-slate-500 dark:text-gray-400 text-xs font-sans">Monitoreo de sincronización y estado del clúster remoto en MongoDB Atlas</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
             <button
               onClick={onRefreshDbStatus}
-              className="flex items-center gap-1.5 bg-[#0B1528] hover:bg-blue-500/10 px-3.5 py-1.5 border border-blue-500/15 rounded-xl text-xs text-gray-300 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#0B1528] dark:hover:bg-blue-500/10 px-3.5 py-1.5 border border-slate-200 dark:border-blue-500/15 rounded-xl text-xs text-slate-700 dark:text-gray-300 transition-colors cursor-pointer"
               title="Volver a verificar estado de la base de datos"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+              <RefreshCw className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
               Verificar Conexión
             </button>
           </div>
@@ -549,24 +628,24 @@ export default function EventSection({
 
         {/* Database statistics info row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
-          <div className="bg-[#050B17] border border-white/5 p-3.5 rounded-xl">
-            <span className="text-[10px] text-gray-500 font-mono uppercase block">Motor Activo</span>
-            <span className="text-xs font-semibold text-white mt-1 block">
+          <div className="bg-slate-50 dark:bg-[#050B17] border border-slate-200 dark:border-white/5 p-3.5 rounded-xl">
+            <span className="text-[10px] text-slate-400 dark:text-gray-500 font-mono uppercase block">Motor Activo</span>
+            <span className="text-xs font-semibold text-slate-800 dark:text-white mt-1 block">
               {dbStatus?.mode || 'Cargando...'}
             </span>
           </div>
 
-          <div className="bg-[#050B17] border border-white/5 p-3.5 rounded-xl">
-            <span className="text-[10px] text-gray-500 font-mono uppercase block">Dirección del Clúster</span>
-            <span className="text-xs font-mono text-gray-400 mt-1 block truncate" title={dbStatus?.uri}>
+          <div className="bg-slate-50 dark:bg-[#050B17] border border-slate-200 dark:border-white/5 p-3.5 rounded-xl">
+            <span className="text-[10px] text-slate-400 dark:text-gray-500 font-mono uppercase block">Dirección del Clúster</span>
+            <span className="text-xs font-mono text-slate-600 dark:text-gray-400 mt-1 block truncate" title={dbStatus?.uri}>
               {dbStatus?.uri || 'No disponible'}
             </span>
           </div>
 
-          <div className="bg-[#050B17] border border-white/5 p-3.5 rounded-xl">
-            <span className="text-[10px] text-gray-500 font-mono uppercase block">Estado Colecciones</span>
-            <span className="text-xs font-semibold text-amber-400 mt-1 flex items-center gap-1">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="bg-slate-50 dark:bg-[#050B17] border border-slate-200 dark:border-white/5 p-3.5 rounded-xl">
+            <span className="text-[10px] text-slate-400 dark:text-gray-500 font-mono uppercase block">Estado Colecciones</span>
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               <span>Participantes, Eventos, Historial</span>
             </span>
           </div>
@@ -575,31 +654,31 @@ export default function EventSection({
         {/* If we have errors / fallback mode is active, show diagnostics and troubleshoot instructions */}
         {!dbStatus?.connected && (
           <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-4 space-y-3">
-            <div className="flex gap-2 text-amber-400">
+            <div className="flex gap-2 text-amber-600 dark:text-amber-400">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <span className="text-xs font-bold font-sans uppercase tracking-wide block">Fallo en Conexión a MongoDB Atlas - Modo de Contingencia Activo</span>
-                <p className="text-[11px] text-gray-400 leading-relaxed font-sans">
+                <p className="text-[11px] text-slate-600 dark:text-gray-400 leading-relaxed font-sans">
                   El sistema no pudo establecer conexión con el clúster remoto de MongoDB Atlas. Se ha activado el **Módulo de Contingencia Local**, el cual guarda todas las asignaciones y bitácoras de auditoría en memoria y archivo JSON local (`/data/sorteo_db.json`). Todo funciona al 100%, pero se recomienda configurar tu conexión.
                 </p>
               </div>
             </div>
 
             {dbStatus?.error && (
-              <div className="bg-black/40 border border-white/5 rounded-lg p-2.5">
-                <span className="text-[9px] font-mono text-rose-400 uppercase tracking-widest block mb-1">Registro de Error Técnico (Mongoose/Atlas)</span>
-                <p className="text-[10px] font-mono text-gray-300 break-all leading-normal">
+              <div className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/5 rounded-lg p-2.5">
+                <span className="text-[9px] font-mono text-rose-500 dark:text-rose-400 uppercase tracking-widest block mb-1">Registro de Error Técnico (Mongoose/Atlas)</span>
+                <p className="text-[10px] font-mono text-slate-700 dark:text-gray-300 break-all leading-normal">
                   {dbStatus.error}
                 </p>
               </div>
             )}
 
-            <div className="pt-1.5 border-t border-white/5 space-y-2">
-              <span className="text-[10px] font-bold font-mono text-amber-400/80 uppercase block">Posibles Causas y Soluciones:</span>
-              <ul className="text-[10px] text-gray-400 list-disc list-inside space-y-1 font-sans">
-                <li><strong className="text-gray-300">Lista blanca de IPs en MongoDB Atlas:</strong> Asegúrate de que la IP del servidor de Cloud Run tenga permitido el acceso (puedes agregar <code className="bg-[#050B17] px-1 rounded text-amber-500">0.0.0.0/0</code> en Network Access en la consola de Atlas).</li>
-                <li><strong className="text-gray-300">Formato del URI de Conexión:</strong> Verifica que el URI en las variables de entorno sea el correcto y no contenga caracteres inválidos o dobles arrobas (<code className="bg-[#050B17] px-1 rounded">@</code>).</li>
-                <li><strong className="text-gray-300">Credenciales Inválidas:</strong> Valida que el usuario (<code className="bg-[#050B17] px-1 rounded">pipeblox_db_user</code>) y la contraseña sean correctos en el Secrets Manager de AI Studio o tu archivo local.</li>
+            <div className="pt-1.5 border-t border-slate-200 dark:border-white/5 space-y-2">
+              <span className="text-[10px] font-bold font-mono text-amber-600 dark:text-amber-400/80 uppercase block">Posibles Causas y Soluciones:</span>
+              <ul className="text-[10px] text-slate-500 dark:text-gray-400 list-disc list-inside space-y-1 font-sans">
+                <li><strong className="text-slate-700 dark:text-gray-300">Lista blanca de IPs en MongoDB Atlas:</strong> Asegúrate de que la IP del servidor de Cloud Run tenga permitido el acceso (puedes agregar <code className="bg-slate-100 dark:bg-[#050B17] px-1 rounded text-amber-600 dark:text-amber-500">0.0.0.0/0</code> en Network Access en la consola de Atlas).</li>
+                <li><strong className="text-slate-700 dark:text-gray-300">Formato del URI de Conexión:</strong> Verifica que el URI en las variables de entorno sea el correcto y no contenga caracteres inválidos o dobles arrobas (<code className="bg-slate-100 dark:bg-[#050B17] px-1 rounded">@</code>).</li>
+                <li><strong className="text-slate-700 dark:text-gray-300">Credenciales Inválidas:</strong> Valida que el usuario (<code className="bg-slate-100 dark:bg-[#050B17] px-1 rounded">pipeblox_db_user</code>) y la contraseña sean correctos en el Secrets Manager de AI Studio o tu archivo local.</li>
               </ul>
             </div>
           </div>
@@ -607,17 +686,17 @@ export default function EventSection({
       </div>
 
       {/* Simulation/Event Configuration Controls Card */}
-      <div className="bg-[#070D19]/80 border border-blue-500/10 p-5 rounded-2xl shadow-xl backdrop-blur-xl flex flex-wrap gap-6 items-center justify-between">
+      <div className="bg-white dark:bg-[#070D19]/80 border border-slate-200 dark:border-blue-500/10 p-5 rounded-2xl shadow-xl backdrop-blur-xl flex flex-wrap gap-6 items-center justify-between">
         <div className="flex items-center gap-3">
-          <Settings className="w-5 h-5 text-amber-400" />
+          <Settings className="w-5 h-5 text-amber-500 dark:text-amber-400" />
           <div>
-            <h3 className="text-white font-medium text-sm">Ajustes de Sorteo</h3>
-            <p className="text-gray-400 text-xs">Ajusta la velocidad y sonido del sorteo oficial</p>
+            <h3 className="text-slate-800 dark:text-white font-semibold text-sm">Ajustes de Sorteo</h3>
+            <p className="text-slate-500 dark:text-gray-400 text-xs">Ajusta la velocidad y sonido del sorteo oficial</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-4 items-center">
-          <div className="flex items-center gap-2 bg-[#0B1528] px-3 py-1.5 border border-blue-500/15 rounded-xl text-xs text-gray-300">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-[#0B1528] px-3 py-1.5 border border-slate-200 dark:border-blue-500/15 rounded-xl text-xs text-slate-700 dark:text-gray-300">
             <span>Intervalo:</span>
             <input
               type="range"
@@ -625,24 +704,24 @@ export default function EventSection({
               max="200"
               value={appConfig.tempoFlashing}
               onChange={(e) => onUpdateConfig({ tempoFlashing: Number(e.target.value) })}
-              className="w-20 accent-amber-400"
+              className="w-20 accent-amber-500 dark:accent-amber-400"
             />
-            <span>{appConfig.tempoFlashing}ms</span>
+            <span className="font-semibold text-slate-800 dark:text-white">{appConfig.tempoFlashing}ms</span>
           </div>
 
           <button
             onClick={toggleSound}
-            className="flex items-center gap-1.5 bg-[#0B1528] hover:bg-blue-500/10 px-3.5 py-1.5 border border-blue-500/15 rounded-xl text-xs text-gray-300 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#0B1528] dark:hover:bg-blue-500/10 px-3.5 py-1.5 border border-slate-200 dark:border-blue-500/15 rounded-xl text-xs text-slate-700 dark:text-gray-300 transition-colors cursor-pointer font-medium"
           >
             {appConfig.soundEnabled ? (
               <>
-                <Volume2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400 font-semibold">Sonido Activado</span>
+                <Volume2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Sonido Activado</span>
               </>
             ) : (
               <>
-                <VolumeX className="w-4 h-4 text-rose-400" />
-                <span className="text-gray-400">Silenciado</span>
+                <VolumeX className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                <span className="text-slate-500 dark:text-gray-400">Silenciado</span>
               </>
             )}
           </button>
@@ -658,7 +737,7 @@ export default function EventSection({
       </div>
 
       {/* Main TV Show Lottery Stage */}
-      <div className="relative bg-gradient-to-b from-[#080E1C] to-[#03060C] border border-blue-500/15 rounded-3xl p-8 shadow-2xl overflow-hidden min-h-[460px] flex flex-col justify-between">
+      <div className="relative bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200/60 dark:from-[#080E1C] dark:to-[#03060C] border border-slate-200 dark:border-blue-500/15 rounded-3xl p-8 shadow-2xl overflow-hidden min-h-[460px] flex flex-col justify-between transition-colors duration-300">
         {/* Particle Canvas */}
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
 
@@ -667,15 +746,15 @@ export default function EventSection({
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-500/5 rounded-full blur-[100px]" />
 
         {/* Top bar HUD */}
-        <div className="relative z-20 flex justify-between items-center pb-4 border-b border-white/5">
+        <div className="relative z-20 flex justify-between items-center pb-4 border-b border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-gray-400 text-xs uppercase font-mono tracking-widest">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse" />
+            <span className="text-slate-500 dark:text-gray-400 text-xs uppercase font-mono tracking-widest">
               SorteoSOS Oficial • En Proyección
             </span>
           </div>
-          <div className="text-xs font-mono bg-blue-500/15 text-blue-300 border border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+          <div className="text-xs font-mono bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin" />
             <span>Faltan {unassignedParticipants.length} Participantes</span>
           </div>
         </div>
@@ -691,13 +770,13 @@ export default function EventSection({
                 className="space-y-4"
               >
                 <div className="space-y-1">
-                  <span className="text-amber-400 text-xs font-mono uppercase tracking-widest font-bold">
+                  <span className="text-amber-600 dark:text-amber-400 text-xs font-mono uppercase tracking-widest font-bold">
                     {isFlashing ? 'Asignando número aleatorio...' : 'Número Asignado Tentativo'}
                   </span>
-                  <h2 className="text-2xl md:text-3xl font-extrabold text-white leading-tight">
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-white leading-tight">
                     {currentParticipant?.nombre} {currentParticipant?.apellido}
                   </h2>
-                  <p className="text-gray-400 text-xs font-mono">
+                  <p className="text-slate-500 dark:text-gray-400 text-xs font-mono">
                     {currentParticipant?.equipo} • {currentParticipant?.area}
                   </p>
                 </div>
@@ -734,9 +813,9 @@ export default function EventSection({
                 animate={{ opacity: 1 }}
                 className="py-8 max-w-sm"
               >
-                <HelpCircle className="w-12 h-12 text-blue-500/40 mx-auto mb-3" />
-                <h3 className="text-white font-medium text-base mb-1">Preparar Asignación</h3>
-                <p className="text-gray-400 text-xs leading-relaxed">
+                <HelpCircle className="w-12 h-12 text-blue-500/60 dark:text-blue-500/40 mx-auto mb-3" />
+                <h3 className="text-slate-800 dark:text-white font-semibold text-base mb-1">Preparar Asignación</h3>
+                <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">
                   Selecciona uno de los {unassignedParticipants.length} participantes activos restantes para iniciar la ceremonia pública de asignación.
                 </p>
               </motion.div>
@@ -745,20 +824,20 @@ export default function EventSection({
         </div>
 
         {/* Bottom bar Control Actions for Admin */}
-        <div className="relative z-20 border-t border-white/5 pt-5">
+        <div className="relative z-20 border-t border-slate-200 dark:border-white/5 pt-5">
           {(!eventState.participanteActualId && !isFlashing && !isRelanzando) ? (
             /* Phase 1: Select Participant and Trigger Draw */
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-              <div className="w-full sm:w-80 bg-[#0B1528] border border-blue-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
+              <div className="w-full sm:w-80 bg-slate-100 dark:bg-[#0B1528] border border-slate-300 dark:border-blue-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
                 <select
                   disabled={isSequentialActive}
                   value={selectedParticipantId}
                   onChange={(e) => setSelectedParticipantId(e.target.value)}
-                  className="bg-[#0B1528] border-none text-xs text-white placeholder-gray-500 focus:outline-none w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-sans"
+                  className="bg-transparent border-none text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-sans"
                 >
-                  <option value="" className="bg-[#0B1528] text-gray-400">-- Elegir Participante Disponible --</option>
+                  <option value="" className="bg-white dark:bg-[#0B1528] text-slate-500 dark:text-gray-400">-- Elegir Participante Disponible --</option>
                   {unassignedParticipants.map((p) => (
-                    <option key={p._id || p.id} value={p._id || p.id} className="bg-[#0B1528] text-white">
+                    <option key={p._id || p.id} value={p._id || p.id} className="bg-white dark:bg-[#0B1528] text-slate-800 dark:text-white">
                       {p.nombre} {p.apellido} ({p.equipo || 'Sin Equipo'})
                     </option>
                   ))}
@@ -772,7 +851,7 @@ export default function EventSection({
                   w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer
                   ${selectedParticipantId && !isFlashing && !isSequentialActive
                     ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25'
-                    : 'bg-slate-900 border border-white/5 text-gray-500 cursor-not-allowed'
+                    : 'bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-400 dark:text-gray-500 cursor-not-allowed'
                   }
                 `}
               >
@@ -789,7 +868,7 @@ export default function EventSection({
                 className={`
                   px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer
                   ${isFlashing
-                    ? 'bg-slate-900 border border-white/5 text-gray-500 cursor-not-allowed'
+                    ? 'bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-400 dark:text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
                   }
                 `}
@@ -804,8 +883,8 @@ export default function EventSection({
                 className={`
                   px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer
                   ${isFlashing
-                    ? 'bg-slate-900 border border-white/5 text-gray-500 cursor-not-allowed'
-                    : 'bg-amber-500/10 border-amber-500/35 hover:bg-amber-500/15 text-amber-300'
+                    ? 'bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'bg-amber-500/10 border-amber-500/35 hover:bg-amber-500/15 text-amber-700 dark:text-amber-300'
                   }
                 `}
               >
@@ -820,12 +899,12 @@ export default function EventSection({
       {/* Reroll confirmation modal */}
       {showRerollConfirm && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0B1528] border border-amber-500/30 p-6 rounded-2xl max-w-sm w-full space-y-4">
+          <div className="bg-white dark:bg-[#0B1528] border border-slate-200 dark:border-amber-500/30 p-6 rounded-2xl max-w-sm w-full space-y-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-amber-400 flex-shrink-0" />
+              <AlertCircle className="w-6 h-6 text-amber-500 dark:text-amber-400 flex-shrink-0" />
               <div>
-                <h4 className="text-white font-semibold text-sm">¿Desea descartar y relanzar?</h4>
-                <p className="text-gray-400 text-xs leading-relaxed mt-1">
+                <h4 className="text-slate-800 dark:text-white font-semibold text-sm">¿Desea descartar y relanzar?</h4>
+                <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed mt-1">
                   El número propuesto ({flashNumber}) será liberado y devuelto al conjunto. Comenzará una nueva asignación aleatoria y este número descartado nunca se repetirá en este reintento.
                 </p>
               </div>
@@ -833,7 +912,7 @@ export default function EventSection({
             <div className="flex justify-end gap-2 text-xs font-bold">
               <button
                 onClick={() => setShowRerollConfirm(false)}
-                className="bg-slate-900 border border-white/10 hover:border-white/20 text-white px-3.5 py-1.5 rounded-lg cursor-pointer"
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-white/20 text-slate-700 dark:text-white px-3.5 py-1.5 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
@@ -851,12 +930,12 @@ export default function EventSection({
       {/* Reset Confirmation modal */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0B1528] border border-rose-500/30 p-6 rounded-2xl max-w-sm w-full space-y-4">
+          <div className="bg-white dark:bg-[#0B1528] border border-slate-200 dark:border-rose-500/30 p-6 rounded-2xl max-w-sm w-full space-y-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-rose-400 flex-shrink-0" />
+              <AlertCircle className="w-6 h-6 text-rose-500 dark:text-rose-400 flex-shrink-0" />
               <div>
-                <h4 className="text-white font-semibold text-sm">¿Reiniciar todo el SorteoSOS?</h4>
-                <p className="text-gray-400 text-xs leading-relaxed mt-1">
+                <h4 className="text-slate-800 dark:text-white font-semibold text-sm">¿Reiniciar todo el SorteoSOS?</h4>
+                <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed mt-1">
                   Esta acción es irreversible y requiere privilegios. Borrará absolutamente todas las asignaciones existentes en la base de datos MongoDB, liberando los 99 números y devolviendo el sorteo a su estado original listo.
                 </p>
               </div>
@@ -864,7 +943,7 @@ export default function EventSection({
             <div className="flex justify-end gap-2 text-xs font-bold">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="bg-slate-900 border border-white/10 text-white px-3.5 py-1.5 rounded-lg cursor-pointer"
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white px-3.5 py-1.5 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
@@ -884,7 +963,7 @@ export default function EventSection({
 
       {/* Mode: Automated Sequential (Paso a Paso) Control Panel */}
       {unassignedParticipants.length > 0 && (
-        <div className="bg-gradient-to-b from-[#0B1528] via-[#050D1D] to-[#040810] border border-amber-500/25 p-6 rounded-3xl shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-[#0B1528] dark:via-[#050D1D] dark:to-[#040810] border border-slate-200 dark:border-amber-500/25 p-6 rounded-3xl shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
           
@@ -892,11 +971,11 @@ export default function EventSection({
             {/* Left Column: Progress Info & HUD */}
             <div className="lg:col-span-7 space-y-4">
               <div className="space-y-1.5 text-center md:text-left">
-                <span className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider animate-pulse">
+                <span className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider animate-pulse">
                   {isSequentialActive ? '● Sorteo en Ejecución Paso a Paso' : 'Modo Secuencial Recomendado'}
                 </span>
-                <h4 className="text-white font-black text-xl flex items-center justify-center md:justify-start gap-2">
-                  <Sparkles className={`w-5.5 h-5.5 text-amber-400 ${isSequentialActive ? 'animate-spin' : ''}`} />
+                <h4 className="text-slate-800 dark:text-white font-black text-xl flex items-center justify-center md:justify-start gap-2">
+                  <Sparkles className={`w-5.5 h-5.5 text-amber-500 dark:text-amber-400 ${isSequentialActive ? 'animate-spin' : ''}`} />
                   Sorteo Automático 1-a-1
                 </h4>
                 <div className="flex gap-2 mt-2">
@@ -906,7 +985,7 @@ export default function EventSection({
                       setDrawStrategy('sequential');
                       drawStrategyRef.current = 'sequential';
                     }}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'sequential' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-gray-500 border border-white/5'}`}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'sequential' ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-gray-400 border border-slate-300 dark:border-white/5'}`}
                   >
                     Orden de Lista
                   </button>
@@ -916,15 +995,15 @@ export default function EventSection({
                       setDrawStrategy('random');
                       drawStrategyRef.current = 'random';
                     }}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'random' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-gray-500 border border-white/5'}`}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${drawStrategy === 'random' ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-gray-400 border border-slate-300 dark:border-white/5'}`}
                   >
                     Orden Aleatorio
                   </button>
 
-                  <div className="flex flex-wrap items-center gap-4 ml-auto pl-4 border-l border-white/10">
+                  <div className="flex flex-wrap items-center gap-4 ml-auto pl-4 border-l border-slate-200 dark:border-white/10">
                     <div className="flex flex-col gap-1 items-start">
-                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Velocidad:</span>
-                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                      <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono uppercase font-bold">Velocidad:</span>
+                      <div className="flex gap-1 bg-slate-200/60 dark:bg-slate-900/50 p-1 rounded-full border border-slate-300 dark:border-white/5">
                         {[15, 30, 50, 80, 120].map((speed) => (
                           <button
                             key={speed}
@@ -932,7 +1011,7 @@ export default function EventSection({
                             className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
                               rollSpeed === speed 
                                 ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
-                                : 'text-gray-500 hover:text-gray-300'
+                                : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-300'
                             }`}
                           >
                             {speed === 15 ? '🚀🚀' : speed === 30 ? '🚀' : speed === 50 ? '⚡' : speed === 80 ? '⏱️' : '🐢'}
@@ -942,16 +1021,16 @@ export default function EventSection({
                     </div>
 
                     <div className="flex flex-col gap-1 items-start">
-                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Espera Post-Sorteo:</span>
-                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
-                        {[0, 500, 1000, 2000, 3000].map((pause) => (
+                      <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono uppercase font-bold">Espera Post-Sorteo:</span>
+                      <div className="flex gap-1 bg-slate-200/60 dark:bg-slate-900/50 p-1 rounded-full border border-slate-300 dark:border-white/5 font-sans">
+                        {[0, 1000, 2000, 3000, 5000, 8000, 10000].map((pause) => (
                           <button
                             key={pause}
                             onClick={() => setSeqPause(pause)}
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all cursor-pointer ${
                               seqPause === pause 
                                 ? 'bg-amber-500 text-slate-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]' 
-                                : 'text-gray-500 hover:text-gray-300'
+                                : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-300'
                             }`}
                           >
                             {pause === 0 ? '0s' : `${pause / 1000}s`}
@@ -961,8 +1040,8 @@ export default function EventSection({
                     </div>
 
                     <div className="flex flex-col gap-1 items-start">
-                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Ritmo / Modo:</span>
-                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                      <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono uppercase font-bold">Ritmo / Modo:</span>
+                      <div className="flex gap-1 bg-slate-200/60 dark:bg-slate-900/50 p-1 rounded-full border border-slate-300 dark:border-white/5">
                         {(['show', 'fast', 'express'] as const).map((mode) => (
                           <button
                             key={mode}
@@ -970,7 +1049,7 @@ export default function EventSection({
                             className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all uppercase ${
                               seqSpeedMode === mode 
                                 ? 'bg-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
-                                : 'text-gray-500 hover:text-gray-300'
+                                : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-300'
                             }`}
                           >
                             {mode === 'show' ? 'Show 🎉' : mode === 'fast' ? 'Rápido ⚡' : 'Express 🚀'}
@@ -980,24 +1059,24 @@ export default function EventSection({
                     </div>
                   </div>
                 </div>
-                <p className="text-gray-400 text-xs mt-2 leading-relaxed">
-                  El sistema avanzará automáticamente uno a uno. <span className="text-amber-300 font-semibold">Usa los controles de velocidad y ritmo</span> para personalizar la duración de cada sorteo (desde el espectacular <span className="text-purple-400 font-bold">Modo Show</span> hasta el ultra-fluido <span className="text-purple-400 font-bold">Modo Express</span>).
+                <p className="text-slate-500 dark:text-gray-400 text-xs mt-2 leading-relaxed font-sans">
+                  El sistema avanzará automáticamente uno a uno. <span className="text-amber-600 dark:text-amber-300 font-semibold">Usa los controles de velocidad y ritmo</span> para personalizar la duración de cada sorteo (desde el espectacular <span className="text-purple-600 dark:text-purple-400 font-bold">Modo Show</span> hasta el ultra-fluido <span className="text-purple-600 dark:text-purple-400 font-bold">Modo Express</span>).
                 </p>
               </div>
 
               {/* Live Activity Monitor HUD */}
               {(isSequentialActive || seqStep !== 'idle') && (
-                <div className="bg-slate-950/80 border border-amber-500/20 rounded-2xl p-4.5 space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-white/5">
+                <div className="bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-amber-500/20 rounded-2xl p-4.5 space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-200 dark:border-white/5">
                     <div>
-                      <span className="text-[10px] font-mono text-gray-500 uppercase">Sorteando Actualmente</span>
-                      <p className="text-amber-400 text-sm font-black tracking-wide">
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-gray-500 uppercase">Sorteando Actualmente</span>
+                      <p className="text-amber-600 dark:text-amber-400 text-sm font-black tracking-wide">
                         👤 {seqCurrentName || 'Buscando candidato...'}
                       </p>
                     </div>
                     {seqStep === 'pausing' && seqCountdown !== null && (
-                      <div className="bg-amber-500/10 border border-amber-400/30 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-mono text-amber-400 font-extrabold animate-pulse">
-                        <Clock className="w-4 h-4 text-amber-400" />
+                      <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-mono text-amber-600 dark:text-amber-400 font-extrabold animate-pulse">
+                        <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span>Pausa de Control: {seqCountdown}s</span>
                       </div>
                     )}
@@ -1018,19 +1097,19 @@ export default function EventSection({
                           key={stepItem.key} 
                           className={`flex items-start gap-2.5 p-2 rounded-xl transition-all ${
                             isActive 
-                              ? 'bg-amber-500/10 border border-amber-500/20 translate-x-1.5' 
-                              : 'opacity-50'
+                              ? 'bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 translate-x-1.5' 
+                              : 'opacity-40'
                           }`}
                         >
                           <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                            isActive ? 'bg-amber-400 animate-ping' : 'bg-gray-600'
+                            isActive ? 'bg-amber-500 dark:bg-amber-400 animate-ping' : 'bg-gray-400'
                           }`} />
                           <div>
-                            <p className={`font-bold ${isActive ? 'text-amber-400' : 'text-gray-300'}`}>
+                            <p className={`font-bold ${isActive ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-gray-300'}`}>
                               {stepItem.label}
                             </p>
                             {isActive && (
-                              <p className="text-gray-400 text-[11px] mt-0.5 leading-relaxed">
+                              <p className="text-slate-500 dark:text-gray-400 text-[11px] mt-0.5 leading-relaxed">
                                 {stepItem.key === 'pausing' && seqCountdown !== null
                                   ? `Guardado automático en ${seqCountdown} segundos. Puedes pausar para detener el reloj.`
                                   : stepItem.desc}
@@ -1046,13 +1125,13 @@ export default function EventSection({
 
               {/* Progress metrics and bar */}
               <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs font-mono text-gray-400">
+                <div className="flex justify-between items-center text-xs font-mono text-slate-500 dark:text-gray-400">
                   <span>Progreso de Asignación Global:</span>
-                  <span className="text-amber-400 font-bold">
+                  <span className="text-amber-600 dark:text-amber-400 font-bold">
                     {participants.filter(p => p.participa && p.numeroAsignado).length} de {participants.filter(p => p.participa).length} ({Math.round((participants.filter(p => p.participa && p.numeroAsignado).length / Math.max(1, participants.filter(p => p.participa).length)) * 100)}%)
                   </span>
                 </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5 p-0.5">
+                <div className="w-full bg-slate-200 dark:bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-300 dark:border-white/5 p-0.5">
                   <div 
                     className="bg-gradient-to-r from-amber-400 via-[#E6C280] to-amber-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(230,194,128,0.4)]"
                     style={{ width: `${(participants.filter(p => p.participa && p.numeroAsignado).length / Math.max(1, participants.filter(p => p.participa).length)) * 100}%` }}
@@ -1078,7 +1157,7 @@ export default function EventSection({
                   className={`w-full sm:w-64 font-extrabold text-xs px-6 py-4 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-[1.02]
                     ${unassignedParticipants.length > 0
                       ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 border border-amber-300/40'
-                      : 'bg-slate-900 border border-white/5 text-gray-500 cursor-not-allowed'
+                      : 'bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-400 dark:text-gray-500 cursor-not-allowed'
                     }
                   `}
                 >
@@ -1088,11 +1167,11 @@ export default function EventSection({
               )}
 
               {isSequentialActive ? (
-                <div className="text-center lg:text-right font-mono text-[10px] text-amber-400 animate-pulse max-w-xs leading-relaxed">
+                <div className="text-center lg:text-right font-mono text-[10px] text-amber-600 dark:text-amber-400 animate-pulse max-w-xs leading-relaxed">
                   ● El sorteo se está transmitiendo en tiempo real a la pantalla de proyección. No cierres esta pestaña.
                 </div>
               ) : (
-                <div className="text-center lg:text-right font-mono text-[10px] text-gray-500 max-w-xs leading-relaxed">
+                <div className="text-center lg:text-right font-mono text-[10px] text-slate-500 max-w-xs leading-relaxed">
                   Usa este panel para automatizar completamente la asignación del 100% de los participantes con pausas configuradas.
                 </div>
               )}
@@ -1103,13 +1182,13 @@ export default function EventSection({
 
       {/* Mode: Auto Assign (Bulk Assign in <2s) Banner */}
       {unassignedParticipants.length > 0 && (
-        <div className="bg-gradient-to-r from-[#0C152B] via-[#08223B] to-[#0C152B] border border-blue-500/25 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row gap-5 items-center justify-between">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-[#0C152B] dark:via-[#08223B] dark:to-[#0C152B] border border-slate-200 dark:border-blue-500/25 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row gap-5 items-center justify-between">
           <div className="space-y-1 text-center md:text-left">
-            <h4 className="text-white font-medium text-sm flex items-center justify-center md:justify-start gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+            <h4 className="text-slate-800 dark:text-white font-semibold text-sm flex items-center justify-center md:justify-start gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400 animate-pulse" />
               Modo Automático Rápido
             </h4>
-            <p className="text-gray-400 text-xs max-w-xl">
+            <p className="text-slate-500 dark:text-gray-400 text-xs max-w-xl">
               ¿Desea asignar de inmediato todos los participantes sin ceremonias visuales? El algoritmo distribuirá números aleatorios únicos de forma instantánea a los {unassignedParticipants.length} registrados en menos de 2 segundos, guardando todo directamente en MongoDB.
             </p>
           </div>
