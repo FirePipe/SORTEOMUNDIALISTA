@@ -52,6 +52,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
 
   // Monitor events via WebSocket in real-time
   const [rollingParticipantName, setRollingParticipantName] = useState<string | null>(null);
+  const [lastWinner, setLastWinner] = useState<{ nombre: string; apellido: string; equipo: string; area: string } | null>(null);
 
   useEffect(() => {
     const socket = socketIOClient(window.location.origin);
@@ -90,10 +91,22 @@ export default function PublicSection({ participants, eventState, appConfig }: P
       stopFlashing();
       setShowCelebration(true);
       setIsRolling(false);
+      
+      // If we have data about the participant, store it as last winner
+      if (data.participant) {
+        setLastWinner({
+          nombre: data.participant.nombre,
+          apellido: data.participant.apellido,
+          equipo: data.participant.equipo,
+          area: data.participant.area
+        });
+      }
+      
       setRollingParticipantName(null);
       // Persist the confirmed number in the local flasher to avoid flickering
-      if (data.numeroAsignado) {
-        setLocalFlasher(data.numeroAsignado);
+      const confirmedNum = data.number || data.numeroAsignado;
+      if (confirmedNum) {
+        setLocalFlasher(confirmedNum);
       }
     });
 
@@ -129,7 +142,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     apellido: '',
     equipo: 'Sorteo en Curso',
     area: 'Auditando...'
-  } : currentParticipantFromState;
+  } : (showCelebration ? lastWinner : currentParticipantFromState);
 
   return (
     <div className="relative min-h-[620px] bg-[#020617] border border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden shadow-[0_0_80px_rgba(30,58,138,0.3)]">
