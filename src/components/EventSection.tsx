@@ -49,6 +49,8 @@ export default function EventSection({
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
   const [rollSpeed, setRollSpeed] = useState(50); // Speed in ms
+  const [seqPause, setSeqPause] = useState(2000); // Pause between steps in ms
+  const [seqSpeedMode, setSeqSpeedMode] = useState<'show' | 'fast' | 'express'>('show'); // Speed mode preset
   const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '??');
   const [isRelanzando, setIsRelanzando] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
@@ -83,6 +85,7 @@ export default function EventSection({
   // Use refs to keep loop data fresh without re-triggering the useEffect
   const participantsRef = useRef(participants);
   const eventStateRef = useRef(eventState);
+  const seqSpeedModeRef = useRef(seqSpeedMode);
 
   useEffect(() => {
     participantsRef.current = participants;
@@ -91,6 +94,10 @@ export default function EventSection({
   useEffect(() => {
     eventStateRef.current = eventState;
   }, [eventState]);
+
+  useEffect(() => {
+    seqSpeedModeRef.current = seqSpeedMode;
+  }, [seqSpeedMode]);
 
   // List of active participants who still do not have an assigned number
   const unassignedParticipants = React.useMemo(() => {
@@ -190,7 +197,10 @@ export default function EventSection({
         isWaitingForAPI = false;
         if (flashIntervalRef.current) clearTimeout(flashIntervalRef.current);
         
-        const { chosenNumber, sequence } = res;
+        const { chosenNumber, sequence, state } = res as any;
+        if (state) {
+          eventStateRef.current = state;
+        }
 
         let flashIdx = 0;
         const totalSteps = sequence.length;
@@ -250,7 +260,10 @@ export default function EventSection({
 
   const handleConfirm = async () => {
     try {
-      await onConfirmNumber();
+      const res = await onConfirmNumber() as any;
+      if (res && res.state) {
+        eventStateRef.current = res.state;
+      }
       setConfettiActive(false);
       setSelectedParticipantId('');
       setFlashNumber('??');
@@ -267,7 +280,10 @@ export default function EventSection({
 
       setIsRelanzando(true);
       setShowRerollConfirm(false);
-      await onRerollNumber();
+      const res = await onRerollNumber() as any;
+      if (res && res.state) {
+        eventStateRef.current = res.state;
+      }
       setConfettiActive(false);
       setFlashNumber('??');
       
@@ -292,7 +308,17 @@ export default function EventSection({
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     const run = async () => {
+      const confirmedInLoop = new Set<string>();
+
       while (isSequentialActiveRef.current && isMounted) {
+        // Get settings based on current speed mode
+        const mode = seqSpeedModeRef.current;
+        const currentSpeeds = {
+          show: { nameRead: 2500, celebrate: 2500, countdown: 4, rest: 2000 },
+          fast: { nameRead: 1000, celebrate: 1200, countdown: 2, rest: 1000 },
+          express: { nameRead: 400, celebrate: 500, countdown: 0, rest: 200 }
+        }[mode] || { nameRead: 2500, celebrate: 2500, countdown: 4, rest: 2000 };
+
         // 1. Check if there is an active participant already that hasn't been confirmed yet
         // Access via Ref to avoid dependency loop
         const currentEventState = eventStateRef.current;
@@ -306,23 +332,34 @@ export default function EventSection({
           setFlashNumber(currentEventState.numeroPropuesto);
           
           // Pause and countdown for confirmation
-          setSeqStep('pausing');
-          for (let i = 6; i > 0; i--) {
-            if (!isSequentialActiveRef.current || !isMounted) return;
-            setSeqCountdown(i);
-            await delay(1000);
+          if (currentSpeeds.countdown > 0) {
+            setSeqStep('pausing');
+            for (let i = currentSpeeds.countdown; i > 0; i--) {
+              if (!isSequentialActiveRef.current || !isMounted) return;
+              setSeqCountdown(i);
+              await delay(1000);
+            }
           }
           if (!isSequentialActiveRef.current || !isMounted) return;
           
           setSeqStep('confirming');
           await handleConfirm();
-          await delay(2000);
+          
+          // Add to local confirmed set
+          confirmedInLoop.add(currentEventState.participanteActualId.toString());
+
+          await delay(seqPause); // Use configurable pause
           continue;
         }
 
         // 2. Find next unassigned participant based on strategy
         let nextParticipant: Participant | undefined;
         
+        const isAlreadyConfirmed = (p: Participant) => {
+          const idStr = p._id?.toString() || p.id?.toString() || '';
+          return confirmedInLoop.has(idStr) || !!p.numeroAsignado;
+        };
+
         // If we have an active participant but NO proposed number (REROLLED state)
         if (currentEventState.participanteActualId && !currentEventState.numeroPropuesto) {
           nextParticipant = currentParticipants.find(
@@ -333,12 +370,12 @@ export default function EventSection({
         // Otherwise find a new one
         if (!nextParticipant) {
           if (drawStrategyRef.current === 'random') {
-            const available = currentParticipants.filter(p => p.participa && !p.numeroAsignado);
+            const available = currentParticipants.filter(p => p.participa && !isAlreadyConfirmed(p));
             if (available.length > 0) {
               nextParticipant = available[Math.floor(Math.random() * available.length)];
             }
           } else {
-            nextParticipant = currentParticipants.find(p => p.participa && !p.numeroAsignado);
+            nextParticipant = currentParticipants.find(p => p.participa && !isAlreadyConfirmed(p));
           }
         }
         
@@ -356,8 +393,8 @@ export default function EventSection({
         setSelectedParticipantId(pId);
         setSeqStep('selecting');
         
-        // Wait 2.5 seconds to read name on screen
-        await delay(2500);
+        // Wait to read name on screen
+        await delay(currentSpeeds.nameRead);
         if (!isSequentialActiveRef.current || !isMounted) return;
 
         // Trigger roll
@@ -366,31 +403,55 @@ export default function EventSection({
           const chosen = await triggerRollPromise(pId);
           if (!isMounted || !isSequentialActiveRef.current) return;
 
-          // Celebrate for 2.5 seconds of flashing confetti
+          // Celebrate for flashing confetti
           setSeqStep('celebrating');
           setFlashNumber(chosen);
-          await delay(2500);
+          await delay(currentSpeeds.celebrate);
           if (!isMounted || !isSequentialActiveRef.current) return;
 
           // Pause and countdown (Verification pause)
-          setSeqStep('pausing');
-          for (let i = 6; i > 0; i--) {
-            if (!isSequentialActiveRef.current || !isMounted) return;
-            setSeqCountdown(i);
-            await delay(1000);
+          if (currentSpeeds.countdown > 0) {
+            setSeqStep('pausing');
+            for (let i = currentSpeeds.countdown; i > 0; i--) {
+              if (!isSequentialActiveRef.current || !isMounted) return;
+              setSeqCountdown(i);
+              await delay(1000);
+            }
           }
           if (!isMounted || !isSequentialActiveRef.current) return;
 
           // Confirm and write to DB
           setSeqStep('confirming');
           await handleConfirm();
-          // Give 2 seconds of resting breathing space
-          await delay(2000);
-        } catch (err) {
+          
+          // Add to local confirmed set
+          confirmedInLoop.add(pId.toString());
+
+          // Give resting breathing space
+          await delay(seqPause);
+        } catch (err: any) {
           console.error("Error during sequential roll step:", err);
-          // If already rolling, just wait a bit and try again
-          if (err === "Already rolling") {
-            await delay(1000);
+          const errMsg = err?.message || String(err);
+          
+          // Auto-recovery for "draw already in progress" or "Already rolling" locks
+          if (errMsg.includes("already in progress") || errMsg.includes("Already rolling") || err === "Already rolling") {
+            setSeqStep('selecting');
+            try {
+              // Wait 1.5 seconds for DB and server state to settle
+              await delay(1500);
+              // Fetch latest ground truth state directly from API
+              const res = await fetch('/api/event/state');
+              if (res.ok) {
+                const freshState = await res.json();
+                eventStateRef.current = freshState;
+                // If the state settled back to LISTO, retry in the next loop iteration
+                if (freshState.estado === 'LISTO') {
+                  continue;
+                }
+              }
+            } catch (recoveryErr) {
+              console.error("Recovery state fetch failed:", recoveryErr);
+            }
             continue;
           }
           setSequentialActive(false);
@@ -827,27 +888,67 @@ export default function EventSection({
                     Orden Aleatorio
                   </button>
 
-                  <div className="flex items-center gap-1.5 ml-auto pl-4 border-l border-white/10">
-                    <span className="text-[10px] text-gray-500 font-mono uppercase font-bold">Velocidad:</span>
-                    <div className="flex gap-1.5 bg-slate-900/50 p-1 rounded-full border border-white/5">
-                      {[30, 50, 80, 120].map((speed) => (
-                        <button
-                          key={speed}
-                          onClick={() => setRollSpeed(speed)}
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
-                            rollSpeed === speed 
-                              ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
-                              : 'text-gray-500 hover:text-gray-300'
-                          }`}
-                        >
-                          {speed === 30 ? '🚀' : speed === 50 ? '⚡' : speed === 80 ? '⏱️' : '🐢'}
-                        </button>
-                      ))}
+                  <div className="flex flex-wrap items-center gap-4 ml-auto pl-4 border-l border-white/10">
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Velocidad:</span>
+                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                        {[15, 30, 50, 80, 120].map((speed) => (
+                          <button
+                            key={speed}
+                            onClick={() => setRollSpeed(speed)}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                              rollSpeed === speed 
+                                ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
+                                : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            {speed === 15 ? '🚀🚀' : speed === 30 ? '🚀' : speed === 50 ? '⚡' : speed === 80 ? '⏱️' : '🐢'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Espera Post-Sorteo:</span>
+                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                        {[0, 500, 1000, 2000, 3000].map((pause) => (
+                          <button
+                            key={pause}
+                            onClick={() => setSeqPause(pause)}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                              seqPause === pause 
+                                ? 'bg-amber-500 text-slate-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]' 
+                                : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            {pause === 0 ? '0s' : `${pause / 1000}s`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="text-[9px] text-gray-500 font-mono uppercase font-bold">Ritmo / Modo:</span>
+                      <div className="flex gap-1 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                        {(['show', 'fast', 'express'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setSeqSpeedMode(mode)}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all uppercase ${
+                              seqSpeedMode === mode 
+                                ? 'bg-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
+                                : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            {mode === 'show' ? 'Show 🎉' : mode === 'fast' ? 'Rápido ⚡' : 'Express 🚀'}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-                <p className="text-gray-400 text-xs mt-2">
-                  El sistema avanzará uno a uno garantizando que <span className="text-amber-300 font-semibold">los números nunca se repitan</span>. Introducirá pausas visuales estratégicas para que puedas verificar el resultado en el panel antes de confirmarlo.
+                <p className="text-gray-400 text-xs mt-2 leading-relaxed">
+                  El sistema avanzará automáticamente uno a uno. <span className="text-amber-300 font-semibold">Usa los controles de velocidad y ritmo</span> para personalizar la duración de cada sorteo (desde el espectacular <span className="text-purple-400 font-bold">Modo Show</span> hasta el ultra-fluido <span className="text-purple-400 font-bold">Modo Express</span>).
                 </p>
               </div>
 

@@ -59,6 +59,9 @@ export default function Dashboard() {
   // Carousel Image index
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  // Connection State for adaptive fallback polling
+  const [socketConnected, setSocketConnected] = useState(false);
+
   // Auth States
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [adminUser, setAdminUser] = useState<string | null>(localStorage.getItem('admin_username'));
@@ -66,6 +69,14 @@ export default function Dashboard() {
   // Socket Connection for Real-Time Sync
   useEffect(() => {
     const socket = socketIOClient(window.location.origin);
+
+    socket.on('connect', () => {
+      setSocketConnected(true);
+    });
+
+    socket.on('disconnect', () => {
+      setSocketConnected(false);
+    });
 
     // Get initial state
     socket.emit('get:state');
@@ -117,19 +128,31 @@ export default function Dashboard() {
   }, [token]);
 
   // Robust automatic periodic polling (Vercel Compatibility Fallback)
-  // Ensures that all 52 concurrent users see updates in real-time without having to reload (F5)
+  // Ensures that all users see updates eventually if sockets fail
   useEffect(() => {
-    // Only poll frequently if we are NOT in the middle of an animation or if we are not the admin active tab
-    // For simplicity, let's just increase the interval to 8 seconds to reduce CPU load
+    // If socket is connected, poll very slowly (every 30 seconds) to save resources.
+    // If socket is disconnected (e.g. on Vercel), poll frequently (every 2.5 seconds) to ensure real-time sync.
+    const pollInterval = socketConnected ? 30000 : 2500;
+    let pollCount = 0;
+
     const interval = setInterval(() => {
-      fetchEventState();
-      fetchParticipants();
-      fetchLogs();
-      fetchDbStatus();
-    }, 8000);
+      // Only poll if window is focused to save resources
+      if (document.visibilityState === 'visible') {
+        fetchEventState();
+        fetchParticipants();
+        
+        pollCount++;
+        // Fetch logs and DB status less frequently (every 10 seconds on fallback, every 2 minutes on socket)
+        const statusPollCycle = socketConnected ? 4 : 4; 
+        if (pollCount % statusPollCycle === 0) {
+          fetchLogs();
+          fetchDbStatus();
+        }
+      }
+    }, pollInterval);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [socketConnected]);
 
   // Automatic rotation of the QLED screen slideshow every 4.5 seconds
   useEffect(() => {
@@ -313,7 +336,11 @@ export default function Dashboard() {
       const err = await res.json();
       throw new Error(err.error || 'Failed to roll');
     }
-    return await res.json();
+    const data = await res.json();
+    if (data.state) {
+      setEventState(data.state);
+    }
+    return data;
   };
 
   const handleRerollNumber = async () => {
@@ -325,6 +352,11 @@ export default function Dashboard() {
       }
     });
     if (!res.ok) throw new Error('Reroll failed');
+    const data = await res.json();
+    if (data.state) {
+      setEventState(data.state);
+    }
+    return data;
   };
 
   const handleConfirmNumber = async () => {
@@ -336,6 +368,12 @@ export default function Dashboard() {
       }
     });
     if (!res.ok) throw new Error('Confirm failed');
+    const data = await res.json();
+    if (data.state) {
+      setEventState(data.state);
+    }
+    fetchParticipants();
+    return data;
   };
 
   const handleAutoAssign = async () => {
@@ -348,6 +386,12 @@ export default function Dashboard() {
     if (!res.ok) {
       const err = await res.json();
       alert(err.error || 'Auto assignment failed');
+    } else {
+      const data = await res.json();
+      if (data.state) {
+        setEventState(data.state);
+      }
+      fetchParticipants();
     }
   };
 
@@ -359,6 +403,8 @@ export default function Dashboard() {
       }
     });
     if (!res.ok) throw new Error('Reset failed');
+    fetchEventState();
+    fetchParticipants();
   };
 
   const handleUpdateConfig = async (configUpdate: Partial<AppConfig>) => {

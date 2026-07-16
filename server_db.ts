@@ -120,7 +120,7 @@ interface IConfig {
   nombreEvento: string;
 }
 
-// Local File Store Class for fallback
+// Local File Store Class for fallback with In-Memory Caching
 class LocalStore {
   private data: {
     usuarios: any[];
@@ -129,6 +129,7 @@ class LocalStore {
     state: IState;
     config: IConfig;
   };
+  private isDirty: boolean = false;
 
   constructor() {
     this.data = {
@@ -162,6 +163,13 @@ class LocalStore {
       }
     };
     this.load();
+    
+    // Periodically save if dirty to reduce write frequency during fast animations
+    setInterval(() => {
+      if (this.isDirty) {
+        this.save();
+      }
+    }, 2000);
   }
 
   private load() {
@@ -172,19 +180,20 @@ class LocalStore {
         this.data = { ...this.data, ...parsed };
         if (!this.data.participantes || this.data.participantes.length === 0) {
           this.data.participantes = SEED_PARTICIPANTS.map((p, i) => ({ _id: `p-init-${i + 1}`, ...p }));
-          this.save();
+          this.isDirty = true;
         }
       } catch (e) {
         console.error("Error reading local DB file, using defaults", e);
       }
     } else {
-      this.save();
+      this.isDirty = true;
     }
   }
 
   private save() {
     try {
       fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(this.data, null, 2), "utf-8");
+      this.isDirty = false;
     } catch (e) {
       console.error("Error writing local DB file", e);
     }
@@ -194,20 +203,20 @@ class LocalStore {
   addUser(user: any) {
     const newUser = { _id: Date.now().toString(), ...user };
     this.data.usuarios.push(newUser);
-    this.save();
+    this.isDirty = true;
     return newUser;
   }
 
   getParticipants() { return this.data.participantes; }
   setParticipants(list: any[]) {
     this.data.participantes = list;
-    this.save();
+    this.isDirty = true;
   }
   updateParticipant(id: string, update: any) {
     const idx = this.data.participantes.findIndex(p => p._id === id || p.id === id);
     if (idx !== -1) {
       this.data.participantes[idx] = { ...this.data.participantes[idx], ...update };
-      this.save();
+      this.isDirty = true;
       return this.data.participantes[idx];
     }
     return null;
@@ -215,37 +224,37 @@ class LocalStore {
   addParticipant(p: any) {
     const newP = { _id: "p-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4), ...p };
     this.data.participantes.push(newP);
-    this.save();
+    this.isDirty = true;
     return newP;
   }
   deleteParticipant(id: string) {
     this.data.participantes = this.data.participantes.filter(p => p._id !== id && p.id !== id);
-    this.save();
+    this.isDirty = true;
   }
 
   getLogs() { return this.data.logs; }
   addLog(log: any) {
     const newLog = { _id: "log-" + Date.now(), fecha: new Date().toISOString(), ...log };
     this.data.logs.unshift(newLog); // newest first
-    this.save();
+    this.isDirty = true;
     return newLog;
   }
   clearLogs() {
     this.data.logs = [];
-    this.save();
+    this.isDirty = true;
   }
 
   getState() { return this.data.state; }
   updateState(update: Partial<IState>) {
     this.data.state = { ...this.data.state, ...update };
-    this.save();
+    this.isDirty = true;
     return this.data.state;
   }
 
   getConfig() { return this.data.config; }
   updateConfig(update: Partial<IConfig>) {
     this.data.config = { ...this.data.config, ...update };
-    this.save();
+    this.isDirty = true;
     return this.data.config;
   }
 
@@ -263,7 +272,7 @@ class LocalStore {
       numerosAsignados: [],
       descartadosEnEsteIntento: []
     };
-    this.save();
+    this.isDirty = true;
   }
 }
 
@@ -433,13 +442,7 @@ export const db = {
     await ensureConnected();
     if (useLocalFile) return localStore.getParticipants();
     
-    if (cacheParticipants && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
-      return cacheParticipants;
-    }
-    
-    cacheParticipants = await ParticipantModel.find({});
-    cacheTimestamp = Date.now();
-    return cacheParticipants;
+    return await ParticipantModel.find({});
   },
 
   async addParticipant(p: any) {
@@ -497,10 +500,6 @@ export const db = {
     await ensureConnected();
     if (useLocalFile) return localStore.getState();
     
-    if (cacheState && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
-      return cacheState;
-    }
-
     let st = await StateModel.findOne({});
     if (!st) {
       st = await StateModel.create({
@@ -512,7 +511,6 @@ export const db = {
         descartadosEnEsteIntento: []
       });
     }
-    cacheState = st;
     return st;
   },
 
@@ -533,10 +531,6 @@ export const db = {
     await ensureConnected();
     if (useLocalFile) return localStore.getConfig();
 
-    if (cacheConfig && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
-      return cacheConfig;
-    }
-
     let cfg = await ConfigModel.findOne({});
     if (!cfg) {
       cfg = await ConfigModel.create({
@@ -546,7 +540,6 @@ export const db = {
         nombreEvento: "Sorteo Oficial de Números SorteoSOS"
       });
     }
-    cacheConfig = cfg;
     return cfg;
   },
 

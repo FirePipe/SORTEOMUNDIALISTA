@@ -50,86 +50,135 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     return () => clearInterval(timer);
   }, []);
 
-  // Monitor events via WebSocket in real-time
+  // Monitor events via props and unified observer
   const [rollingParticipantName, setRollingParticipantName] = useState<string | null>(null);
   const [lastWinner, setLastWinner] = useState<{ nombre: string; apellido: string; equipo: string; area: string } | null>(null);
 
+  const lastStateKeyRef = useRef<string | null>(null);
+  const lastConfirmedKeyRef = useRef<string | null>(null);
+
+  // Unified status observer to support both instant Sockets and Polling fallback (e.g. on Vercel)
   useEffect(() => {
-    const socket = socketIOClient(window.location.origin);
+    // 1. If state is EJECUTANDO, a roll is in progress!
+    if (eventState.estado === 'EJECUTANDO' && eventState.participanteActualId && eventState.numeroPropuesto) {
+      const stateKey = `${eventState.participanteActualId}-${eventState.numeroPropuesto}`;
+      
+      // If we haven't animated this roll yet, animate it!
+      if (lastStateKeyRef.current !== stateKey) {
+        lastStateKeyRef.current = stateKey;
+        
+        // Only trigger if not already rolling to prevent duplicate triggers
+        if (!isRolling) {
+          stopFlashing();
+          setLastWinner(null);
+          setIsRolling(true);
+          setShowCelebration(false);
 
-    socket.on('event:rolling', (data: { participantName: string; sequence: string[]; targetNumber: string }) => {
-      stopFlashing();
-      setLastWinner(null);
-      setIsRolling(true);
-      setShowCelebration(false);
-      setRollingParticipantName(data.participantName);
-      let idx = 0;
-      const seq = data.sequence;
+          const matchedParticipant = participants.find(
+            p => p._id?.toString() === eventState.participanteActualId || p.id?.toString() === eventState.participanteActualId
+          );
+          const fullName = matchedParticipant ? `${matchedParticipant.nombre} ${matchedParticipant.apellido}` : 'Sorteo en Curso';
+          setRollingParticipantName(fullName);
 
-      const runTick = () => {
-        if (idx < seq.length) {
-          setLocalFlasher(seq[idx]);
-          if (appConfig.soundEnabled) {
-            audio.playRolling();
-            audio.playTick(220 + idx * 5);
+          // Generate animation sequence
+          const sequenceLength = 12;
+          const availableList = eventState.numerosDisponibles || [];
+          const target = eventState.numeroPropuesto;
+          
+          let seq: string[] = [];
+          if (availableList.length >= sequenceLength) {
+            seq = [...availableList].sort(() => 0.5 - Math.random()).slice(0, sequenceLength);
+          } else if (availableList.length > 0) {
+            for (let i = 0; i < sequenceLength; i++) {
+              seq.push(availableList[Math.floor(Math.random() * availableList.length)]);
+            }
+          } else {
+            for (let i = 0; i < sequenceLength; i++) {
+              seq.push(String(Math.floor(Math.random() * 99) + 1).padStart(2, '0'));
+            }
           }
-          idx++;
-          flashTimeoutRef.current = setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
-        } else {
-          setLocalFlasher(data.targetNumber);
-          setIsRolling(false);
+
+          // Ensure target is the final item
+          if (!seq.includes(target)) {
+            seq[seq.length - 1] = target;
+          } else {
+            seq = seq.filter(n => n !== target);
+            seq.push(target);
+          }
+
+          let idx = 0;
+          const runTick = () => {
+            if (idx < seq.length) {
+              setLocalFlasher(seq[idx]);
+              if (appConfig.soundEnabled) {
+                audio.playRolling();
+                audio.playTick(220 + idx * 5);
+              }
+              idx++;
+              flashTimeoutRef.current = setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
+            } else {
+              setLocalFlasher(target);
+              setIsRolling(false);
+            }
+          };
+          runTick();
         }
-      };
-      runTick();
-    });
+      }
+    }
+    
+    // 2. If state is LISTO and we had an active state, check if it was confirmed!
+    else if (eventState.estado === 'LISTO') {
+      if (lastStateKeyRef.current) {
+        const parts = lastStateKeyRef.current.split('-');
+        const lastPartId = parts[0];
+        const lastNum = parts[1];
+        
+        // Prevent duplicate celebrations for the same stateKey
+        if (lastConfirmedKeyRef.current !== lastStateKeyRef.current) {
+          lastConfirmedKeyRef.current = lastStateKeyRef.current;
+          
+          stopFlashing();
+          setShowCelebration(true);
+          setIsRolling(false);
+          setRollingParticipantName(null);
 
-    socket.on('event:confirmed', (data: any) => {
-      stopFlashing();
-      setShowCelebration(true);
+          if (appConfig.soundEnabled) {
+            audio.playBing();
+            audio.playSuccessFanfare();
+          }
+
+          const winner = participants.find(
+            p => p._id?.toString() === lastPartId || p.id?.toString() === lastPartId
+          );
+          if (winner) {
+            setLastWinner({
+              nombre: winner.nombre,
+              apellido: winner.apellido,
+              equipo: winner.equipo || '',
+              area: winner.area || ''
+            });
+          }
+          if (lastNum) {
+            setLocalFlasher(lastNum);
+          }
+        }
+        lastStateKeyRef.current = null;
+      } else {
+        // Safe sync if page loaded during LISTO
+        if (!isRolling && eventState.numeroPropuesto) {
+          setLocalFlasher(eventState.numeroPropuesto);
+        }
+      }
+    } 
+    
+    // 3. Reset or other states
+    else {
+      lastStateKeyRef.current = null;
       setIsRolling(false);
-
-      if (appConfig.soundEnabled) {
-        audio.playBing();
-        audio.playSuccessFanfare();
-      }
-      
-      // If we have data about the participant, store it as last winner
-      if (data.participant) {
-        setLastWinner({
-          nombre: data.participant.nombre,
-          apellido: data.participant.apellido,
-          equipo: data.participant.equipo,
-          area: data.participant.area
-        });
-      }
-      
-      setRollingParticipantName(null);
-      // Persist the confirmed number in the local flasher to avoid flickering
-      const confirmedNum = data.number || data.numeroAsignado;
-      if (confirmedNum) {
-        setLocalFlasher(confirmedNum);
-      }
-    });
-
-    socket.on('event:rerolled', (data: any) => {
-      stopFlashing();
       setShowCelebration(false);
-      setIsRolling(false);
       setRollingParticipantName(null);
-    });
-
-    socket.on('event:reset-complete', () => {
-      stopFlashing();
-      setShowCelebration(false);
-      setIsRolling(false);
-      setRollingParticipantName(null);
-      setLocalFlasher('??');
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [appConfig.soundEnabled, appConfig.tempoFlashing]);
+    }
+  }, [eventState.estado, eventState.participanteActualId, eventState.numeroPropuesto, participants, appConfig.soundEnabled, appConfig.tempoFlashing, isRolling]);
 
   // Map values
   const totalAssigned = participants.filter(p => p.numeroAsignado).length;
