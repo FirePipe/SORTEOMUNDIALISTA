@@ -78,6 +78,18 @@ export default function EventSection({
   const flashIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Use refs to keep loop data fresh without re-triggering the useEffect
+  const participantsRef = useRef(participants);
+  const eventStateRef = useRef(eventState);
+
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
+
+  useEffect(() => {
+    eventStateRef.current = eventState;
+  }, [eventState]);
+
   // List of active participants who still do not have an assigned number
   const unassignedParticipants = React.useMemo(() => {
     return participants.filter(p => p.participa && !p.numeroAsignado);
@@ -148,7 +160,7 @@ export default function EventSection({
   // Clean up timer
   useEffect(() => {
     return () => {
-      if (flashIntervalRef.current) clearInterval(flashIntervalRef.current);
+      if (flashIntervalRef.current) clearTimeout(flashIntervalRef.current);
     };
   }, []);
 
@@ -268,25 +280,17 @@ export default function EventSection({
 
     const run = async () => {
       while (isSequentialActiveRef.current && isMounted) {
-        // 1. Find next unassigned participant based on strategy
-        let nextParticipant: Participant | undefined;
-        
-        if (drawStrategyRef.current === 'random') {
-          const available = participants.filter(p => p.participa && !p.numeroAsignado);
-          if (available.length > 0) {
-            nextParticipant = available[Math.floor(Math.random() * available.length)];
-          }
-        } else {
-          nextParticipant = participants.find(p => p.participa && !p.numeroAsignado);
-        }
-        
-        // If there is an active participant already that hasn't been confirmed yet
-        if (eventState.participanteActualId && eventState.numeroPropuesto) {
-          const currentP = participants.find(
-            p => p._id?.toString() === eventState.participanteActualId?.toString() || p.id?.toString() === eventState.participanteActualId?.toString()
+        // 1. Check if there is an active participant already that hasn't been confirmed yet
+        // Access via Ref to avoid dependency loop
+        const currentEventState = eventStateRef.current;
+        const currentParticipants = participantsRef.current;
+
+        if (currentEventState.participanteActualId && currentEventState.numeroPropuesto) {
+          const currentP = currentParticipants.find(
+            p => p._id?.toString() === currentEventState.participanteActualId?.toString() || p.id?.toString() === currentEventState.participanteActualId?.toString()
           );
           setSeqCurrentName(currentP ? `${currentP.nombre} ${currentP.apellido}` : 'Participante');
-          setFlashNumber(eventState.numeroPropuesto);
+          setFlashNumber(currentEventState.numeroPropuesto);
           
           // Pause and countdown for confirmation
           setSeqStep('pausing');
@@ -303,6 +307,28 @@ export default function EventSection({
           continue;
         }
 
+        // 2. Find next unassigned participant based on strategy
+        let nextParticipant: Participant | undefined;
+        
+        // If we have an active participant but NO proposed number (REROLLED state)
+        if (currentEventState.participanteActualId && !currentEventState.numeroPropuesto) {
+          nextParticipant = currentParticipants.find(
+            p => p._id?.toString() === currentEventState.participanteActualId?.toString() || p.id?.toString() === currentEventState.participanteActualId?.toString()
+          );
+        }
+
+        // Otherwise find a new one
+        if (!nextParticipant) {
+          if (drawStrategyRef.current === 'random') {
+            const available = currentParticipants.filter(p => p.participa && !p.numeroAsignado);
+            if (available.length > 0) {
+              nextParticipant = available[Math.floor(Math.random() * available.length)];
+            }
+          } else {
+            nextParticipant = currentParticipants.find(p => p.participa && !p.numeroAsignado);
+          }
+        }
+        
         if (!nextParticipant) {
           // No more participants!
           setSequentialActive(false);
@@ -311,7 +337,7 @@ export default function EventSection({
           break;
         }
 
-        // We have a next participant!
+        // 3. We have a participant! Proceed to roll
         const pId = nextParticipant._id || nextParticipant.id || '';
         setSeqCurrentName(`${nextParticipant.nombre} ${nextParticipant.apellido}`);
         setSelectedParticipantId(pId);
@@ -349,6 +375,11 @@ export default function EventSection({
           await delay(2000);
         } catch (err) {
           console.error("Error during sequential roll step:", err);
+          // If already rolling, just wait a bit and try again
+          if (err === "Already rolling") {
+            await delay(1000);
+            continue;
+          }
           setSequentialActive(false);
           setSeqStep('idle');
           break;
@@ -361,7 +392,7 @@ export default function EventSection({
     return () => {
       isMounted = false;
     };
-  }, [isSequentialActive, participants, eventState.participanteActualId, eventState.numeroPropuesto]);
+  }, [isSequentialActive]);
 
   // Find active drawing participant name
   const currentParticipant = participants.find(

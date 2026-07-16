@@ -393,10 +393,27 @@ async function startServer() {
 
     // Generate custom random pre-roll sequence for UI flashing
     // Fill sequence with random available numbers to flashing
-    const size = Math.min(15, remainingPool.length);
-    const flashShuffled = shuffleArray(remainingPool).slice(0, size);
+    // Ensure a minimum of 12 steps for better visual "drama"
+    const minSteps = 12;
+    let flashShuffled: string[] = [];
+    
+    if (remainingPool.length >= minSteps) {
+      flashShuffled = shuffleArray(remainingPool).slice(0, minSteps);
+    } else {
+      // If pool is small, repeat some numbers to maintain animation length
+      flashShuffled = [];
+      for (let i = 0; i < minSteps; i++) {
+        flashShuffled.push(remainingPool[Math.floor(Math.random() * remainingPool.length)]);
+      }
+    }
+
     if (!flashShuffled.includes(chosenNumber)) {
       flashShuffled[flashShuffled.length - 1] = chosenNumber; // guarantee final targets chosen
+    } else {
+      // Move chosenNumber to the end
+      const idx = flashShuffled.indexOf(chosenNumber);
+      flashShuffled.splice(idx, 1);
+      flashShuffled.push(chosenNumber);
     }
 
     await db.addLog({
