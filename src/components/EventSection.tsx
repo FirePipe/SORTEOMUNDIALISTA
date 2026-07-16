@@ -99,6 +99,8 @@ export default function EventSection({
     seqSpeedModeRef.current = seqSpeedMode;
   }, [seqSpeedMode]);
 
+  const rerollTriggeredRef = useRef<boolean>(false);
+
   // List of active participants who still do not have an assigned number
   const unassignedParticipants = React.useMemo(() => {
     return participants.filter(p => p.participa && !p.numeroAsignado);
@@ -280,6 +282,10 @@ export default function EventSection({
 
       setIsRelanzando(true);
       setShowRerollConfirm(false);
+      
+      // Set reroll flag to let the sequential loop know to restart its countdown
+      rerollTriggeredRef.current = true;
+
       const res = await onRerollNumber() as any;
       if (res && res.state) {
         eventStateRef.current = res.state;
@@ -292,6 +298,7 @@ export default function EventSection({
       setIsRelanzando(false);
     } catch (e) {
       setIsRelanzando(false);
+      rerollTriggeredRef.current = false;
       console.error(e);
     }
   };
@@ -336,6 +343,19 @@ export default function EventSection({
             setSeqStep('pausing');
             for (let i = currentSpeeds.countdown; i > 0; i--) {
               if (!isSequentialActiveRef.current || !isMounted) return;
+
+              // If a reroll was triggered during this wait, reset the countdown!
+              if (rerollTriggeredRef.current) {
+                rerollTriggeredRef.current = false;
+                const rollAnimTime = appConfig.tiempoAnimacion || 6000;
+                setSeqStep('rolling');
+                await delay(rollAnimTime + 200);
+                setSeqStep('celebrating');
+                await delay(currentSpeeds.celebrate);
+                setSeqStep('pausing');
+                i = currentSpeeds.countdown; // Reset the loop counter
+              }
+
               setSeqCountdown(i);
               await delay(1000);
             }
@@ -414,6 +434,19 @@ export default function EventSection({
             setSeqStep('pausing');
             for (let i = currentSpeeds.countdown; i > 0; i--) {
               if (!isSequentialActiveRef.current || !isMounted) return;
+
+              // If a reroll was triggered during this wait, reset the countdown!
+              if (rerollTriggeredRef.current) {
+                rerollTriggeredRef.current = false;
+                const rollAnimTime = appConfig.tiempoAnimacion || 6000;
+                setSeqStep('rolling');
+                await delay(rollAnimTime + 200);
+                setSeqStep('celebrating');
+                await delay(currentSpeeds.celebrate);
+                setSeqStep('pausing');
+                i = currentSpeeds.countdown; // Reset the loop counter
+              }
+
               setSeqCountdown(i);
               await delay(1000);
             }

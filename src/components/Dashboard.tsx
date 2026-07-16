@@ -9,10 +9,11 @@ import PublicSection from './PublicSection';
 import AuditSection from './AuditSection';
 import AdminLogin from './AdminLogin';
 import socketIOClient from 'socket.io-client';
+import { useTheme } from '../context/ThemeContext';
 import { 
   Trophy, Users, Calendar, HelpCircle, LayoutDashboard, 
   TableProperties, Disc, LogOut, ShieldCheck, Play, Eye, Terminal, Lock,
-  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight
+  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon
 } from 'lucide-react';
 
 const CAROUSEL_IMAGES = [
@@ -29,6 +30,7 @@ const CAROUSEL_IMAGES = [
 ];
 
 export default function Dashboard() {
+  const { theme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'inicio' | 'tablero' | 'participantes' | 'evento' | 'publico' | 'logs'>('inicio');
   
   // App States
@@ -455,22 +457,22 @@ export default function Dashboard() {
   const availableNumbersCount = 99 - assignedCount;
 
   return (
-    <div className="min-h-screen bg-[#060B15] text-white selection:bg-amber-400 selection:text-slate-950 font-sans antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#060B15] text-slate-800 dark:text-white selection:bg-amber-400 selection:text-slate-950 font-sans antialiased transition-colors duration-300">
       {/* Outer subtle cosmic sky background elements */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[140px] pointer-events-none" />
 
       {/* Main Header */}
-      <header className="border-b border-white/5 bg-[#070D19]/65 backdrop-blur-md sticky top-0 z-40">
+      <header className="border-b border-slate-200 dark:border-white/5 bg-white/75 dark:bg-[#070D19]/65 backdrop-blur-md sticky top-0 z-40 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 via-[#E6C280] to-amber-600 p-0.5 flex items-center justify-center shadow-lg shadow-blue-500/10">
-              <div className="h-full w-full bg-[#070D19] rounded-full flex items-center justify-center">
+              <div className="h-full w-full bg-white dark:bg-[#070D19] rounded-full flex items-center justify-center transition-colors duration-300">
                 <Trophy className="w-5 h-5 text-amber-400" />
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight uppercase bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-[#E6C280]">
+              <h1 className="text-xl font-bold tracking-tight uppercase bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-amber-600 dark:from-white dark:via-blue-100 dark:to-[#E6C280]">
                 SorteoSOS • Asignación de Números
               </h1>
               <p className="text-[10px] text-gray-500 font-mono">FISHER-YATES UNIQUE DISTRIBUTION • AUDITED SECURITY</p>
@@ -478,17 +480,17 @@ export default function Dashboard() {
           </div>
 
           {/* Nav Menu Tabs */}
-          <nav className="flex items-center gap-1 bg-[#0B1528] p-1 border border-blue-500/10 rounded-xl overflow-x-auto max-w-full">
+          <nav className="flex items-center gap-1 bg-slate-100 dark:bg-[#0B1528] p-1 border border-slate-200 dark:border-blue-500/10 rounded-xl overflow-x-auto max-w-full transition-colors duration-300">
             <button
               onClick={() => setActiveTab('inicio')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'inicio' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'inicio' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
               Inicio
             </button>
             <button
               onClick={() => setActiveTab('tablero')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'tablero' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'tablero' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Disc className="w-3.5 h-3.5" />
               Tablero
@@ -496,7 +498,7 @@ export default function Dashboard() {
             {token && (
               <button
                 onClick={() => setActiveTab('participantes')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'participantes' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'participantes' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
                 <TableProperties className="w-3.5 h-3.5" />
                 Participantes
@@ -505,7 +507,7 @@ export default function Dashboard() {
             {token && (
               <button
                 onClick={() => setActiveTab('evento')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'evento' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'evento' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
                 <Play className="w-3.5 h-3.5" />
                 Sorteo Vivo
@@ -513,7 +515,7 @@ export default function Dashboard() {
             )}
             <button
               onClick={() => setActiveTab('publico')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Eye className="w-3.5 h-3.5" />
               Proyectar
@@ -521,7 +523,7 @@ export default function Dashboard() {
             {token && (
               <button
                 onClick={() => setActiveTab('logs')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'logs' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-gray-400 hover:text-white'}`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${activeTab === 'logs' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
               >
                 <Terminal className="w-3.5 h-3.5" />
                 Auditoría
@@ -529,8 +531,16 @@ export default function Dashboard() {
             )}
           </nav>
 
-          {/* Admin Auth Pill */}
+          {/* Theme Toggle & Admin Auth Pill */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-amber-400 transition-all cursor-pointer shadow-sm"
+              title={theme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+
             {token ? (
               <div className="flex items-center gap-2 bg-[#1C160B] border border-[#E6C280]/20 pl-3 pr-2 py-1 rounded-xl shadow-md text-xs">
                 <span className="text-[#E6C280] font-bold">Admin: {adminUser}</span>
@@ -545,7 +555,7 @@ export default function Dashboard() {
             ) : (
               <button
                 onClick={() => setActiveTab('evento')}
-                className="bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/30 hover:border-blue-500/50 text-blue-300 font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
+                className="bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/30 hover:border-blue-500/50 text-blue-600 dark:text-blue-300 font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
               >
                 <Lock className="w-3.5 h-3.5" />
                 Ingresar Admin
@@ -571,18 +581,18 @@ export default function Dashboard() {
               <motion.div 
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 relative overflow-hidden"
+                className="bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-2xl p-6 relative overflow-hidden"
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
                 <div className="flex items-start gap-4">
                   <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                    <Users className="w-5 h-5 text-blue-400" />
+                    <Users className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                       ¡Gracias por hacer esto posible, Equipo! 💙
                     </h3>
-                    <p className="text-gray-300 text-xs leading-relaxed font-medium italic">
+                    <p className="text-slate-600 dark:text-gray-300 text-xs leading-relaxed font-medium italic">
                       "Queremos agradecer de corazón a cada uno de ustedes por sumarse al recaudo para el televisor de 50 pulgadas".
                       <br /><br />
                       Más allá de quién se lleve el premio a casa (¡mucha suerte a todos! 🍀), lo realmente valioso ha sido demostrar, una vez más, la fuerza y la unión que nos caracteriza como Gestión de Ingresos.
@@ -594,7 +604,7 @@ export default function Dashboard() {
               </motion.div>
 
               {/* Main Prize Feature Panel */}
-              <div className="relative overflow-hidden bg-gradient-to-b from-[#0C152B] via-[#050D1C] to-[#040810] border border-amber-500/20 rounded-3xl p-6 md:p-10 shadow-2xl">
+              <div className="relative overflow-hidden bg-white dark:bg-gradient-to-b dark:from-[#0C152B] dark:via-[#050D1C] dark:to-[#040810] border border-slate-200 dark:border-amber-500/20 rounded-3xl p-6 md:p-10 shadow-xl dark:shadow-2xl">
                 <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
                 <div className="absolute -right-32 -top-32 w-96 h-96 bg-amber-500/5 rounded-full blur-[120px] pointer-events-none" />
                 <div className="absolute -left-32 -bottom-32 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
@@ -602,16 +612,16 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 items-center relative z-10">
                   {/* Left Column: TV visual design and badges */}
                   <div className="lg:col-span-5 space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left">
-                    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono text-[10px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-widest animate-pulse">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-widest animate-pulse">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                       Premio Mayor • Gran Sorteo
                     </div>
 
                     <div className="space-y-2">
-                      <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-none uppercase font-sans">
+                      <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-none uppercase font-sans">
                         Televisor HISENSE 50" QLED
                       </h2>
-                      <p className="text-amber-400 text-sm md:text-base font-extrabold tracking-wide">
+                      <p className="text-amber-600 dark:text-amber-400 text-sm md:text-base font-extrabold tracking-wide">
                         Smart TV 50Q4SV • Experiencia de Cine en Casa
                       </p>
                     </div>
@@ -679,17 +689,17 @@ export default function Dashboard() {
                     </div>
 
                     {/* Highlight pill banner */}
-                    <div className="bg-slate-900/80 border border-white/5 px-5 py-3 rounded-2xl w-full">
-                      <p className="text-amber-400 text-xs font-mono uppercase tracking-widest font-black">50" Pantalla Gigante</p>
-                      <p className="text-gray-400 text-[11px] mt-0.5">Disfruta de la mejor calidad de imagen de ultra alta definición.</p>
+                    <div className="bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 px-5 py-3 rounded-2xl w-full">
+                      <p className="text-amber-600 dark:text-amber-400 text-xs font-mono uppercase tracking-widest font-black">50" Pantalla Gigante</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-[11px] mt-0.5">Disfruta de la mejor calidad de imagen de ultra alta definición.</p>
                     </div>
                   </div>
 
                   {/* Right Column: Full specifications matrix table */}
                   <div className="lg:col-span-7 space-y-6">
-                    <div className="border-b border-white/10 pb-3 flex items-center justify-between">
-                      <h3 className="text-sm font-mono text-gray-400 uppercase tracking-wider font-bold">Ficha Técnica Oficial</h3>
-                      <span className="text-[10px] font-mono text-amber-400/80 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/10">Ref: 50Q4SV</span>
+                    <div className="border-b border-slate-200 dark:border-white/10 pb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-mono text-slate-500 dark:text-gray-400 uppercase tracking-wider font-bold">Ficha Técnica Oficial</h3>
+                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400/80 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/10">Ref: 50Q4SV</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
@@ -708,10 +718,10 @@ export default function Dashboard() {
                       ].map((spec, i) => (
                         <div 
                           key={i} 
-                          className="flex items-center justify-between py-2 border-b border-white/5 hover:bg-white/5 px-2 rounded transition-all"
+                          className="flex items-center justify-between py-2 border-b border-slate-200/60 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 px-2 rounded transition-all"
                         >
-                          <span className="text-gray-400 font-medium">{spec.label}</span>
-                          <span className="text-white font-extrabold text-right">{spec.value}</span>
+                          <span className="text-slate-500 dark:text-gray-400 font-medium">{spec.label}</span>
+                          <span className="text-slate-900 dark:text-white font-extrabold text-right">{spec.value}</span>
                         </div>
                       ))}
                     </div>
@@ -726,7 +736,7 @@ export default function Dashboard() {
                       </button>
                       <button
                         onClick={() => setActiveTab('publico')}
-                        className="flex-1 bg-slate-900 hover:bg-slate-850 border border-white/5 text-white font-bold text-xs px-6 py-3.5 rounded-xl cursor-pointer transition-all text-center uppercase tracking-wider"
+                        className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-850 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-white font-bold text-xs px-6 py-3.5 rounded-xl cursor-pointer transition-all text-center uppercase tracking-wider"
                       >
                         Proyectar Sorteo (Pantalla Completa)
                       </button>
@@ -740,47 +750,47 @@ export default function Dashboard() {
                 {/* Left Dynamic Card: Sorteo Oficial */}
                 <motion.div 
                   whileHover={{ y: -5 }}
-                  className="lg:col-span-7 bg-gradient-to-br from-[#0C152B] to-[#040810] border border-blue-500/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+                  className="lg:col-span-7 bg-white dark:bg-gradient-to-br dark:from-[#0C152B] dark:to-[#040810] border border-slate-200 dark:border-blue-500/30 rounded-3xl p-8 shadow-xl dark:shadow-2xl relative overflow-hidden group"
                 >
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-500/20 transition-all" />
                   
                   <div className="relative z-10 space-y-5">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                        <Cpu className="w-6 h-6 text-blue-400" />
+                        <Cpu className="w-6 h-6 text-blue-500 dark:text-blue-400" />
                       </div>
-                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
+                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
                         ESTÁNDAR GLOBAL
                       </span>
                     </div>
 
-                    <h4 className="text-2xl md:text-3xl font-black text-white tracking-tight uppercase">
+                    <h4 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
                       🎰 SISTEMA DE JUEGO OFICIAL
                     </h4>
                     
-                    <p className="text-gray-300 text-sm md:text-base leading-relaxed font-medium">
-                      Participas de forma automática por la compra de tu boleto registrado en nuestra base de datos. La rifa juega con las cifras finales del sorteo oficial del <span className="text-amber-400 font-bold underline decoration-amber-400/30 underline-offset-4">Chontico Noche</span> todas las noches, garantizando absoluta transparencia e imparcialidad pública.
+                    <p className="text-slate-600 dark:text-gray-300 text-sm md:text-base leading-relaxed font-medium">
+                      Participas de forma automática por la compra de tu boleto registrado en nuestra base de datos. La rifa juega con las cifras finales del sorteo oficial del <span className="text-amber-600 dark:text-amber-400 font-bold underline decoration-amber-400/30 underline-offset-4">Chontico Noche</span> todas las noches, garantizando absoluta transparencia e imparcialidad pública.
                     </p>
 
                     {/* Statistics Cards mini-row */}
                     <div className="grid grid-cols-2 gap-5 pt-4">
-                      <div className="bg-[#0B1528]/80 backdrop-blur-sm border border-blue-500/20 p-5 rounded-2xl shadow-inner">
-                        <span className="text-gray-400 text-[10px] font-mono uppercase font-bold tracking-wider">Participantes Activos</span>
-                        <p className="text-3xl font-black text-white mt-1.5 flex items-baseline gap-1">
+                      <div className="bg-slate-50 dark:bg-[#0B1528]/80 backdrop-blur-sm border border-slate-200 dark:border-blue-500/20 p-5 rounded-2xl shadow-inner">
+                        <span className="text-slate-500 dark:text-gray-400 text-[10px] font-mono uppercase font-bold tracking-wider">Participantes Activos</span>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white mt-1.5 flex items-baseline gap-1">
                           {totalCount}
-                          <span className="text-xs text-blue-400/60 font-mono">USUARIOS</span>
+                          <span className="text-xs text-blue-500 dark:text-blue-400/60 font-mono">USUARIOS</span>
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-[10px] text-emerald-400 font-mono font-bold">SINCRO TOTAL</span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">SINCRO TOTAL</span>
                         </div>
                       </div>
-                      <div className="bg-[#1C160B]/80 backdrop-blur-sm border border-[#E6C280]/20 p-5 rounded-2xl shadow-inner">
-                        <span className="text-[#E6C280]/70 text-[10px] font-mono uppercase font-bold tracking-wider">Fecha de Juego</span>
-                        <p className="text-lg font-black text-[#E6C280] mt-1.5 leading-tight">Martes 21 de Julio</p>
+                      <div className="bg-amber-500/5 dark:bg-[#1C160B]/80 backdrop-blur-sm border border-amber-500/10 dark:border-[#E6C280]/20 p-5 rounded-2xl shadow-inner">
+                        <span className="text-amber-700 dark:text-[#E6C280]/70 text-[10px] font-mono uppercase font-bold tracking-wider">Fecha de Juego</span>
+                        <p className="text-lg font-black text-amber-600 dark:text-[#E6C280] mt-1.5 leading-tight">Martes 21 de Julio</p>
                         <div className="flex items-center gap-1.5 mt-2">
-                          <Calendar className="w-3 h-3 text-gray-500" />
-                          <span className="text-[10px] text-gray-400 font-mono">Inicia 8:00 PM</span>
+                          <Calendar className="w-3 h-3 text-slate-400 dark:text-gray-500" />
+                          <span className="text-[10px] text-slate-500 dark:text-gray-400 font-mono">Inicia 8:00 PM</span>
                         </div>
                       </div>
                     </div>
@@ -790,38 +800,38 @@ export default function Dashboard() {
                 {/* Right Dynamic Card: Dinámica del Sorteo */}
                 <motion.div 
                   whileHover={{ y: -5 }}
-                  className="lg:col-span-5 bg-gradient-to-br from-[#1C160B] to-[#040810] border border-amber-500/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+                  className="lg:col-span-5 bg-white dark:bg-gradient-to-br dark:from-[#1C160B] dark:to-[#040810] border border-slate-200 dark:border-amber-500/30 rounded-3xl p-8 shadow-xl dark:shadow-2xl relative overflow-hidden group"
                 >
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-amber-500/20 transition-all" />
 
                   <div className="relative z-10 space-y-6">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
-                        <Layers className="w-6 h-6 text-amber-400" />
+                        <Layers className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                       </div>
-                      <span className="bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
+                      <span className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 font-mono text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest">
                         GUÍA TÉCNICA
                       </span>
                     </div>
 
-                    <h4 className="text-2xl font-black text-white tracking-tight uppercase">
+                    <h4 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
                       ℹ️ REGLAMENTO Y CONDICIONES
                     </h4>
                     
                     <div className="space-y-5 pt-2">
-                      <div className="flex items-start gap-4 p-4 bg-black/40 rounded-2xl border border-white/5">
-                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-mono text-sm text-blue-400 font-black shadow-lg">1</div>
+                      <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-black/40 rounded-2xl border border-slate-100 dark:border-white/5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-mono text-sm text-blue-500 dark:text-blue-400 font-black shadow-lg">1</div>
                         <div className="space-y-1">
-                          <p className="text-white text-sm font-black uppercase tracking-wide">Últimas 2 Cifras</p>
-                          <p className="text-gray-400 text-xs leading-relaxed">El ganador se define única y exclusivamente con las cifras finales del sorteo de Chontico Noche.</p>
+                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Últimas 2 Cifras</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">El ganador se define única y exclusivamente con las cifras finales del sorteo de Chontico Noche.</p>
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-4 p-4 bg-black/40 rounded-2xl border border-white/5">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-sm text-amber-400 font-black shadow-lg">2</div>
+                      <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-black/40 rounded-2xl border border-slate-100 dark:border-white/5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-sm text-amber-600 dark:text-amber-400 font-black shadow-lg">2</div>
                         <div className="space-y-1">
-                          <p className="text-white text-sm font-black uppercase tracking-wide">Sorteo Garantizado</p>
-                          <p className="text-gray-400 text-xs leading-relaxed">Jugamos cada noche hasta que el número extraído coincida exactamente con un participante registrado.</p>
+                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Sorteo Garantizado</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">Jugamos cada noche hasta que el número extraído coincida exactamente con un participante registrado.</p>
                         </div>
                       </div>
                     </div>
@@ -830,29 +840,29 @@ export default function Dashboard() {
               </div>
 
               {/* Live Progress Bar HUD */}
-              <div className="bg-[#070D19]/60 border border-white/5 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-sm">
+              <div className="bg-white dark:bg-[#070D19]/60 border border-slate-200 dark:border-white/5 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-sm transition-colors">
                 <div className="space-y-2 w-full md:w-2/3">
                   <div className="flex justify-between items-center text-xs font-mono">
-                    <span className="text-gray-400 font-bold uppercase tracking-widest">Progreso de Asignación a Participantes:</span>
-                    <span className="text-amber-400 font-black text-sm">
+                    <span className="text-slate-500 dark:text-gray-400 font-bold uppercase tracking-widest">Progreso de Asignación a Participantes:</span>
+                    <span className="text-amber-600 dark:text-amber-400 font-black text-sm">
                       {assignedCount} / {totalCount} ({totalCount > 0 ? Math.round((assignedCount / totalCount) * 100) : 0}%)
                     </span>
                   </div>
-                  <div className="w-full bg-slate-950 h-4 rounded-full overflow-hidden border border-white/10 p-1">
+                  <div className="w-full bg-slate-100 dark:bg-slate-950 h-4 rounded-full overflow-hidden border border-slate-200 dark:border-white/10 p-1">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${totalCount > 0 ? (assignedCount / totalCount) * 100 : 0}%` }}
                       className="bg-gradient-to-r from-amber-600 via-[#E6C280] to-amber-400 h-full rounded-full transition-all duration-700 shadow-[0_0_15px_rgba(230,194,128,0.5)]"
                     />
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono italic">
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">
                     * Métrica calculada en base a los {totalCount} participantes registrados actualmente.
                   </p>
                 </div>
 
-                <div className="bg-slate-950/80 border-2 border-amber-500/20 px-8 py-4 rounded-2xl text-center w-full md:w-auto shadow-2xl">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest font-black block mb-1">Cupos Pendientes</span>
-                  <span className="text-3xl font-mono font-black text-amber-400 tracking-tighter">
+                <div className="bg-slate-50 dark:bg-slate-950/80 border-2 border-slate-200 dark:border-amber-500/20 px-8 py-4 rounded-2xl text-center w-full md:w-auto shadow-inner">
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-gray-500 uppercase tracking-widest font-black block mb-1">Cupos Pendientes</span>
+                  <span className="text-3xl font-mono font-black text-amber-600 dark:text-amber-400 tracking-tighter">
                     {totalCount - assignedCount}
                   </span>
                 </div>
