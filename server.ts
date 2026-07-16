@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import http from "http";
 import { Server } from "socket.io";
-import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import cors from "cors";
@@ -10,8 +9,20 @@ import crypto from "crypto";
 import ExcelJS from "exceljs";
 import { db } from "./server_db.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let _filename = "";
+let _dirname = "";
+try {
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    _filename = fileURLToPath(import.meta.url);
+    _dirname = path.dirname(_filename);
+  } else {
+    _filename = typeof __filename !== "undefined" ? __filename : "";
+    _dirname = typeof __dirname !== "undefined" ? __dirname : "";
+  }
+} catch {
+  _filename = "";
+  _dirname = "";
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || "sorteo-champions-league-tesla-apple-super-secret-key-99";
 
@@ -668,6 +679,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
