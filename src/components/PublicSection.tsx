@@ -13,7 +13,7 @@ interface PublicSectionProps {
 
 export default function PublicSection({ participants, eventState, appConfig }: PublicSectionProps) {
   const [time, setTime] = useState(new Date().toLocaleTimeString('es-ES'));
-  const [localFlasher, setLocalFlasher] = useState(eventState.numeroPropuesto || '00');
+  const [localFlasher, setLocalFlasher] = useState(eventState.numeroPropuesto || '??');
   const [isRolling, setIsRolling] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [ping, setPing] = useState(24);
@@ -42,12 +42,15 @@ export default function PublicSection({ participants, eventState, appConfig }: P
   }, []);
 
   // Monitor events via WebSocket in real-time
+  const [rollingParticipantName, setRollingParticipantName] = useState<string | null>(null);
+
   useEffect(() => {
     const socket = socketIOClient(window.location.origin);
 
     socket.on('event:rolling', (data: { participantName: string; sequence: string[]; targetNumber: string }) => {
       setIsRolling(true);
       setShowCelebration(false);
+      setRollingParticipantName(data.participantName);
       let idx = 0;
       const seq = data.sequence;
 
@@ -56,7 +59,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
           setLocalFlasher(seq[idx]);
           if (appConfig.soundEnabled) {
             audio.playRolling();
-            audio.playTick(220 + idx * 10);
+            audio.playTick(220 + idx * 5);
           }
           idx++;
           setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
@@ -76,22 +79,24 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     socket.on('event:confirmed', (data: any) => {
       setShowCelebration(true);
       setIsRolling(false);
-      // Persist the confirmed number in the local flasher to avoid '00' flicker
+      setRollingParticipantName(null);
+      // Persist the confirmed number in the local flasher to avoid flickering
       if (data.numeroAsignado) {
-        setLocalFlasher(data.numeroAsignado.padStart(2, '0'));
+        setLocalFlasher(data.numeroAsignado);
       }
     });
 
     socket.on('event:rerolled', (data: any) => {
       setShowCelebration(false);
       setIsRolling(false);
-      // Do not reset to '00' here, keep current number until next roll
+      setRollingParticipantName(null);
     });
 
     socket.on('event:reset-complete', () => {
       setShowCelebration(false);
       setIsRolling(false);
-      setLocalFlasher('00');
+      setRollingParticipantName(null);
+      setLocalFlasher('??');
     });
 
     return () => {
@@ -102,9 +107,16 @@ export default function PublicSection({ participants, eventState, appConfig }: P
   // Map values
   const totalAssigned = participants.filter(p => p.numeroAsignado).length;
   
-  const currentParticipant = participants.find(
+  const currentParticipantFromState = participants.find(
     p => p._id?.toString() === eventState.participanteActualId || p.id?.toString() === eventState.participanteActualId
   );
+
+  const displayParticipant = rollingParticipantName ? {
+    nombre: rollingParticipantName,
+    apellido: '',
+    equipo: 'Sorteo en Curso',
+    area: 'Auditando...'
+  } : currentParticipantFromState;
 
   return (
     <div className="relative min-h-[620px] bg-[#020617] border border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden shadow-[0_0_80px_rgba(30,58,138,0.3)]">
@@ -162,7 +174,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
       {/* Spectacular Central Projection Sphere */}
       <div className="relative z-10 my-10 flex flex-col items-center justify-center text-center">
         <AnimatePresence mode="wait">
-          {eventState.participanteActualId || (showCelebration && localFlasher !== '00') ? (
+          {eventState.participanteActualId || (showCelebration && localFlasher !== '??') ? (
             <motion.div
               key="active-raffle"
               initial={{ scale: 0.8, opacity: 0, y: 20 }}
@@ -185,12 +197,12 @@ export default function PublicSection({ participants, eventState, appConfig }: P
                 </motion.div>
 
                 <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-[1.1] max-w-2xl">
-                  {currentParticipant?.nombre} {currentParticipant?.apellido}
+                  {displayParticipant?.nombre} {displayParticipant?.apellido}
                 </h2>
                 <div className="flex items-center justify-center gap-3 text-blue-400/70 font-bold uppercase tracking-[0.2em] text-xs">
-                  <span>{currentParticipant?.equipo}</span>
+                  <span>{displayParticipant?.equipo}</span>
                   <span className="w-1.5 h-1.5 bg-blue-500/30 rounded-full" />
-                  <span>{currentParticipant?.area}</span>
+                  <span>{displayParticipant?.area}</span>
                 </div>
               </div>
 

@@ -360,9 +360,12 @@ async function startServer() {
       return res.status(404).json({ error: "Participant not found" });
     }
 
+    // Source of truth for assigned numbers
+    const actuallyAssigned = new Set(participants.filter(p => p.numeroAsignado).map(p => p.numeroAsignado!));
+    
     // Exclude assigned numbers AND currently discarded numbers in this attempt
     const excludedNumbers = new Set([
-      ...state.numerosAsignados,
+      ...actuallyAssigned,
       ...state.descartadosEnEsteIntento
     ]);
 
@@ -468,7 +471,13 @@ async function startServer() {
 
     // Lock number in state: remove from available, add to assigned, reset attempt discards
     const availableLeft = state.numerosDisponibles.filter(num => num !== confirmedNumber);
-    const assignedList = [...state.numerosAsignados, confirmedNumber];
+    
+    // Recalculate assigned list from all participants to ensure perfect sync
+    const allParticipants = await db.getParticipants();
+    const assignedList = allParticipants.filter(p => p.numeroAsignado).map(p => p.numeroAsignado!);
+    if (!assignedList.includes(confirmedNumber)) {
+      assignedList.push(confirmedNumber);
+    }
 
     const updatedState = await db.updateState({
       participanteActualId: null,

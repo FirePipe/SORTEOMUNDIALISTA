@@ -41,10 +41,10 @@ export default function EventSection({
   
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
-  const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '00');
+  const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '??');
   const [confettiActive, setConfettiActive] = useState(false);
 
-  // Sync flashNumber with prop when not flashing to avoid 00 flicker
+  // Robust sync: Only update flashNumber if NOT currently animating
   useEffect(() => {
     if (!isFlashing && eventState.numeroPropuesto) {
       setFlashNumber(eventState.numeroPropuesto);
@@ -148,6 +148,8 @@ export default function EventSection({
   // Run single randomized drawing wrapped in a Promise
   const triggerRollPromise = (participantId: string): Promise<string> => {
     return new Promise(async (resolve, reject) => {
+      if (isFlashing) return reject("Already rolling");
+      
       setIsFlashing(true);
       setConfettiActive(false);
 
@@ -166,14 +168,15 @@ export default function EventSection({
             
             if (appConfig.soundEnabled) {
               audio.playRolling();
-              const pitch = 220 + (flashIdx * 20);
+              const pitch = 220 + (flashIdx * 5);
               audio.playTick(pitch);
             }
 
             flashIdx++;
-            const nextDelay = baseDelay + Math.pow(flashIdx / totalSteps, 2) * 200;
+            const nextDelay = baseDelay + Math.pow(flashIdx / totalSteps, 2) * 150;
             flashIntervalRef.current = setTimeout(runFlash, nextDelay);
           } else {
+            // Final lock: Use chosenNumber directly
             setFlashNumber(chosenNumber);
             setIsFlashing(false);
             
@@ -545,15 +548,15 @@ export default function EventSection({
               {/* Glossy Reflection Overlay */}
               <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/20 to-transparent rounded-full blur-[5px] transform -rotate-15 pointer-events-none" />
               
-              <motion.span
-                key={flashNumber}
-                initial={{ scale: 0.7, opacity: 0.5, filter: "blur(4px)" }}
-                animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
-                transition={{ type: "spring", stiffness: 450, damping: 12 }}
-                className={`text-7xl font-black font-mono tracking-tighter ${isFlashing ? 'text-slate-900' : 'text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.3)]'}`}
-              >
-                {flashNumber.padStart(2, '0')}
-              </motion.span>
+                <motion.span
+                  key={flashNumber}
+                  initial={{ scale: 0.7, opacity: 0.5, filter: "blur(4px)" }}
+                  animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+                  transition={{ type: "spring", stiffness: 450, damping: 12 }}
+                  className={`text-7xl font-black font-mono tracking-tighter ${isFlashing ? 'text-slate-900' : 'text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.3)]'}`}
+                >
+                  {flashNumber}
+                </motion.span>
             </div>
 
             {/* Reflection base shadow */}
