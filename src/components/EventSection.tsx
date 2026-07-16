@@ -37,8 +37,15 @@ export default function EventSection({
   dbStatus,
   onRefreshDbStatus
 }: EventSectionProps) {
-  const [selectedParticipantId, setSelectedParticipantId] = useState('');
+  const [selectedParticipantId, setSelectedParticipantId] = useState(eventState.participanteActualId || '');
   
+  // Keep selectedParticipantId in sync with eventState for persistence/recovery
+  useEffect(() => {
+    if (eventState.participanteActualId && selectedParticipantId !== eventState.participanteActualId) {
+      setSelectedParticipantId(eventState.participanteActualId);
+    }
+  }, [eventState.participanteActualId]);
+
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
   const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '??');
@@ -152,6 +159,7 @@ export default function EventSection({
       
       setIsFlashing(true);
       setConfettiActive(false);
+      setFlashNumber('??'); // Loading indicator
 
       try {
         const res = await onRollNumber(participantId);
@@ -189,21 +197,31 @@ export default function EventSection({
           }
         };
 
-        runFlash();
+        // If sequence is too short, wait a bit for "drama"
+        if (totalSteps < 5) {
+          setTimeout(runFlash, 500);
+        } else {
+          runFlash();
+        }
       } catch (e) {
         setIsFlashing(false);
+        setFlashNumber('??');
         reject(e);
       }
     });
   };
 
-  const triggerSingleRoll = async () => {
-    if (!selectedParticipantId) return;
+  const handleTriggerRoll = async (participantId: string) => {
+    if (!participantId) return;
     try {
-      await triggerRollPromise(selectedParticipantId);
+      await triggerRollPromise(participantId);
     } catch (e) {
-      console.error(e);
+      console.error("Roll failed:", e);
     }
+  };
+
+  const triggerSingleRoll = async () => {
+    await handleTriggerRoll(selectedParticipantId);
   };
 
   const handleConfirm = async () => {
@@ -220,6 +238,9 @@ export default function EventSection({
   const handleReroll = async () => {
     try {
       if (isFlashing) return;
+      const currentParticipantId = selectedParticipantId || eventState.participanteActualId;
+      if (!currentParticipantId) return;
+
       await onRerollNumber();
       setConfettiActive(false);
       setFlashNumber('??');
@@ -227,8 +248,8 @@ export default function EventSection({
       
       // Wait a tiny bit for state to settle before starting next roll
       setTimeout(() => {
-        triggerSingleRoll();
-      }, 100);
+        handleTriggerRoll(currentParticipantId);
+      }, 150);
     } catch (e) {
       console.error(e);
     }

@@ -436,7 +436,7 @@ async function startServer() {
     const updatedState = await db.updateState({
       numeroPropuesto: null,
       descartadosEnEsteIntento: updatedDiscards,
-      estado: "ESPERA"
+      estado: "LISTO"
     });
 
     const participants = await db.getParticipants();
@@ -491,7 +491,7 @@ async function startServer() {
       numerosDisponibles: availableLeft,
       numerosAsignados: assignedList,
       descartadosEnEsteIntento: [], // reset discards for next person
-      estado: "ESPERA"
+      estado: "LISTO"
     });
 
     await db.addLog({

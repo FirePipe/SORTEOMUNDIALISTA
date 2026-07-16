@@ -59,6 +59,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
 
     socket.on('event:rolling', (data: { participantName: string; sequence: string[]; targetNumber: string }) => {
       stopFlashing();
+      setLastWinner(null);
       setIsRolling(true);
       setShowCelebration(false);
       setRollingParticipantName(data.participantName);
@@ -77,11 +78,6 @@ export default function PublicSection({ participants, eventState, appConfig }: P
         } else {
           setLocalFlasher(data.targetNumber);
           setIsRolling(false);
-          setShowCelebration(true);
-          if (appConfig.soundEnabled) {
-            audio.playBing();
-            audio.playSuccessFanfare();
-          }
         }
       };
       runTick();
@@ -91,6 +87,11 @@ export default function PublicSection({ participants, eventState, appConfig }: P
       stopFlashing();
       setShowCelebration(true);
       setIsRolling(false);
+
+      if (appConfig.soundEnabled) {
+        audio.playBing();
+        audio.playSuccessFanfare();
+      }
       
       // If we have data about the participant, store it as last winner
       if (data.participant) {
