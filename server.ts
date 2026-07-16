@@ -355,6 +355,11 @@ async function startServer() {
     const state = await db.getState();
     const participants = await db.getParticipants();
     
+    // Safety lock: Don't allow multiple simultaneous rolls
+    if (state.estado === "EJECUTANDO") {
+      return res.status(400).json({ error: "A draw is already in progress. Wait for it to finish." });
+    }
+
     const participant = participants.find(p => p._id?.toString() === participanteId || p.id?.toString() === participanteId);
     if (!participant) {
       return res.status(404).json({ error: "Participant not found" });

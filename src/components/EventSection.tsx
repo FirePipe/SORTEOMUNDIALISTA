@@ -211,7 +211,7 @@ export default function EventSection({
       await onConfirmNumber();
       setConfettiActive(false);
       setSelectedParticipantId('');
-      setFlashNumber('00');
+      setFlashNumber('??');
     } catch (e) {
       console.error(e);
     }
@@ -219,11 +219,16 @@ export default function EventSection({
 
   const handleReroll = async () => {
     try {
+      if (isFlashing) return;
       await onRerollNumber();
       setConfettiActive(false);
-      setFlashNumber('00');
+      setFlashNumber('??');
       setShowRerollConfirm(false);
-      triggerSingleRoll();
+      
+      // Wait a tiny bit for state to settle before starting next roll
+      setTimeout(() => {
+        triggerSingleRoll();
+      }, 100);
     } catch (e) {
       console.error(e);
     }

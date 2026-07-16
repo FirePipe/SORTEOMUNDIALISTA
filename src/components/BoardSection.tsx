@@ -276,9 +276,9 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
                     {hoveredNumber === num && isAssigned && assignedParticipant && (
                       <div className={`
                         absolute z-50 bottom-full mb-3 w-64 bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.6)] backdrop-blur-md text-left pointer-events-none animate-fade-in
-                        ${(num % 12 === 1 || num % 12 === 2) ? 'left-0' : (num % 12 === 0 || num % 12 === 11) ? 'right-0' : 'left-1/2 -translate-x-1/2'}
+                        ${(Number(num) % 12 === 1 || Number(num) % 12 === 2) ? 'left-0' : (Number(num) % 12 === 0 || Number(num) % 12 === 11) ? 'right-0' : 'left-1/2 -translate-x-1/2'}
                       `}>
-                        <div className={`absolute bottom-[-6px] w-3 h-3 bg-slate-950 border-r border-b border-amber-500/40 rotate-45 ${(num % 12 === 1 || num % 12 === 2) ? 'left-4' : (num % 12 === 0 || num % 12 === 11) ? 'right-4' : 'left-1/2 -translate-x-1/2'}`} />
+                        <div className={`absolute bottom-[-6px] w-3 h-3 bg-slate-950 border-r border-b border-amber-500/40 rotate-45 ${(Number(num) % 12 === 1 || Number(num) % 12 === 2) ? 'left-4' : (Number(num) % 12 === 0 || Number(num) % 12 === 11) ? 'right-4' : 'left-1/2 -translate-x-1/2'}`} />
                         <div className="flex items-start justify-between mb-1.5 pb-1 border-b border-white/10">
                           <p className="text-amber-400 text-[10px] font-mono uppercase tracking-widest font-bold">Número Confirmado: {num}</p>
                           {assignedParticipant.pago ? (

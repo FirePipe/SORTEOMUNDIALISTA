@@ -17,6 +17,15 @@ export default function PublicSection({ participants, eventState, appConfig }: P
   const [isRolling, setIsRolling] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [ping, setPing] = useState(24);
+  const flashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper to clear flashing loop
+  const stopFlashing = () => {
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = null;
+    }
+  };
 
   // Simulated real-time ping indicator
   useEffect(() => {
@@ -48,6 +57,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     const socket = socketIOClient(window.location.origin);
 
     socket.on('event:rolling', (data: { participantName: string; sequence: string[]; targetNumber: string }) => {
+      stopFlashing();
       setIsRolling(true);
       setShowCelebration(false);
       setRollingParticipantName(data.participantName);
@@ -62,7 +72,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
             audio.playTick(220 + idx * 5);
           }
           idx++;
-          setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
+          flashTimeoutRef.current = setTimeout(runTick, appConfig.tempoFlashing + Math.pow(idx / seq.length, 2) * 150);
         } else {
           setLocalFlasher(data.targetNumber);
           setIsRolling(false);
@@ -77,6 +87,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     });
 
     socket.on('event:confirmed', (data: any) => {
+      stopFlashing();
       setShowCelebration(true);
       setIsRolling(false);
       setRollingParticipantName(null);
@@ -87,12 +98,14 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     });
 
     socket.on('event:rerolled', (data: any) => {
+      stopFlashing();
       setShowCelebration(false);
       setIsRolling(false);
       setRollingParticipantName(null);
     });
 
     socket.on('event:reset-complete', () => {
+      stopFlashing();
       setShowCelebration(false);
       setIsRolling(false);
       setRollingParticipantName(null);
