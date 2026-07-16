@@ -129,9 +129,9 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     // 2. If state is LISTO and we had an active state, check if it was confirmed!
     else if (eventState.estado === 'LISTO') {
       if (lastStateKeyRef.current) {
-        const parts = lastStateKeyRef.current.split('-');
-        const lastPartId = parts[0];
-        const lastNum = parts[1];
+        const lastDashIdx = lastStateKeyRef.current.lastIndexOf('-');
+        const lastPartId = lastDashIdx !== -1 ? lastStateKeyRef.current.substring(0, lastDashIdx) : lastStateKeyRef.current;
+        const lastNum = lastDashIdx !== -1 ? lastStateKeyRef.current.substring(lastDashIdx + 1) : '';
         
         // Prevent duplicate celebrations for the same stateKey
         if (lastConfirmedKeyRef.current !== lastStateKeyRef.current) {
@@ -201,12 +201,14 @@ export default function PublicSection({ participants, eventState, appConfig }: P
     p => p._id?.toString() === eventState.participanteActualId || p.id?.toString() === eventState.participanteActualId
   );
 
-  const displayParticipant = rollingParticipantName ? {
-    nombre: rollingParticipantName,
-    apellido: '',
-    equipo: 'Sorteo en Curso',
-    area: 'Auditando...'
-  } : (showCelebration ? lastWinner : currentParticipantFromState);
+  const displayParticipant = showCelebration 
+    ? lastWinner 
+    : (currentParticipantFromState || (rollingParticipantName ? {
+        nombre: rollingParticipantName,
+        apellido: '',
+        equipo: 'Sorteo en Curso',
+        area: 'Auditando...'
+      } : null));
 
   return (
     <div className="relative min-h-[620px] bg-slate-50 dark:bg-[#020617] border border-slate-200 dark:border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden shadow-[0_0_80px_rgba(30,58,138,0.05)] dark:shadow-[0_0_80px_rgba(30,58,138,0.3)]">
