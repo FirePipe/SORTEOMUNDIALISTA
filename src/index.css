@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* Ultra realistic 3D gold sphere with continuous glistening shine and outer glow */
+.ball-gold-3d {
+  background: radial-gradient(circle at 35% 35%, #FFFDF0 0%, #FFEFA0 15%, #F5C75D 35%, #D4AF37 55%, #927017 80%, #574006 100%) !important;
+  box-shadow: 
+    0 0 16px rgba(212, 175, 55, 0.5),
+    0 4px 10px rgba(0, 0, 0, 0.6),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.75),
+    inset 0 4px 6px rgba(255, 255, 255, 0.65) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ball-gold-3d::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -70%;
+  width: 35%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  animation: goldShine 4s infinite ease-in-out;
+  pointer-events: none;
+}
+
+.ball-gold-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(212, 175, 55, 0.4);
+  animation: goldPulse 3s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 3D Emerald rolling ball style */
+.ball-emerald-3d {
+  background: radial-gradient(circle at 35% 35%, #E6FDF4 0%, #A7F3D0 15%, #34D399 35%, #059669 65%, #046A4E 85%, #022C22 100%) !important;
+  box-shadow: 
+    0 0 24px rgba(16, 185, 129, 0.8),
+    0 4px 12px rgba(0, 0, 0, 0.65),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.8),
+    inset 0 4px 6px rgba(255, 255, 255, 0.7) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ball-emerald-3d::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -70%;
+  width: 35%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  animation: goldShine 2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes goldShine {
+  0% { left: -75%; }
+  15%, 100% { left: 145%; }
+}
+
+@keyframes goldPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.15;
+    box-shadow: 0 0 0 0px rgba(212, 175, 55, 0.3);
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 0.75;
+    box-shadow: 0 0 12px 3px rgba(212, 175, 55, 0.15);
+  }
+}

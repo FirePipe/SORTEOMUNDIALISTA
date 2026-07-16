@@ -1,0 +1,693 @@
+import express from "express";
+import path from "path";
+import http from "http";
+import { Server } from "socket.io";
+import { createServer as createViteServer } from "vite";
+import { fileURLToPath } from "url";
+import jwt from "jsonwebtoken";
+import cors from "cors";
+import crypto from "crypto";
+import ExcelJS from "exceljs";
+import { db } from "./server_db.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const JWT_SECRET = process.env.JWT_SECRET || "sorteo-champions-league-tesla-apple-super-secret-key-99";
+
+async function startServer() {
+  const app = express();
+  const server = http.createServer(app);
+  
+  app.use(cors({ origin: "*" }));
+  app.use(express.json({ limit: "50mb" })); // support large excel uploads
+  
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  const PORT = 3000;
+
+  // Broadcast function
+  const broadcastState = async () => {
+    const state = await db.getState();
+    const config = await db.getConfig();
+    const participants = await db.getParticipants();
+    io.emit("state:changed", { state, config, participantsCount: participants.length });
+  };
+
+  const broadcastParticipants = async () => {
+    const participants = await db.getParticipants();
+    io.emit("participants:changed", participants);
+  };
+
+  // JWT Helper / Middleware
+  const authenticateToken = (req: any, res: any, next: any) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Access token missing" });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+      if (err) {
+        return res.status(403).json({ error: "Invalid or expired token" });
+      }
+      req.user = user;
+      next();
+    });
+  };
+
+  // --- API ROUTES ---
+
+  // Auth
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
+
+    const user = await db.findUser(username);
+    if (!user) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    // Secure simple verification: support both password hash and plain fallback
+    // Since our seeded hash is for "admin123", we'll check that explicitly or do a simple hash
+    const inputHash = crypto.createHash("sha256").update(password).digest("hex");
+    const isDefaultAdmin = username === "admin" && password === "admin123";
+    
+    if (isDefaultAdmin || user.passwordHash === inputHash) {
+      const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "12h" });
+      
+      await db.addLog({
+        accion: "LOGIN",
+        detalles: `El administrador ${username} ingresó al sistema`,
+        usuario: username,
+        ip: req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1"
+      });
+
+      return res.json({ token, username });
+    }
+
+    return res.status(401).json({ error: "Invalid credentials" });
+  });
+
+  // Verify Token
+  app.get("/api/auth/verify", authenticateToken, (req: any, res: any) => {
+    res.json({ valid: true, user: req.user });
+  });
+
+  // Participants CRUD
+  app.get("/api/participants", async (req, res) => {
+    const participants = await db.getParticipants();
+    res.json(participants);
+  });
+
+  app.post("/api/participants", authenticateToken, async (req: any, res: any) => {
+    const { nombre, apellido, equipo, area, pago, participa, medioPago, valor } = req.body;
+    if (!nombre || !apellido) {
+      return res.status(400).json({ error: "Nombre and apellido are required" });
+    }
+
+    const newParticipant = await db.addParticipant({
+      nombre,
+      apellido,
+      equipo: equipo || "",
+      area: area || "",
+      pago: !!pago,
+      participa: participa !== false,
+      numeroAsignado: null,
+      medioPago: medioPago || "",
+      valor: Number(valor) || 0
+    });
+
+    await db.addLog({
+      accion: "CREACION_PARTICIPANTE",
+      detalles: `Se registró manualmente al participante: ${nombre} ${apellido}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    res.status(201).json(newParticipant);
+  });
+
+  app.put("/api/participants/:id", authenticateToken, async (req: any, res: any) => {
+    const { id } = req.params;
+    const update = req.body;
+
+    const updated = await db.updateParticipant(id, update);
+    if (!updated) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    await db.addLog({
+      accion: "EDICION_PARTICIPANTE",
+      detalles: `Se editó al participante ${updated.nombre} ${updated.apellido}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    res.json(updated);
+  });
+
+  app.delete("/api/participants/:id", authenticateToken, async (req: any, res: any) => {
+    const { id } = req.params;
+    await db.deleteParticipant(id);
+
+    await db.addLog({
+      accion: "ELIMINACION_PARTICIPANTE",
+      detalles: `Se eliminó al participante con ID: ${id}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    res.json({ success: true });
+  });
+
+  // Bulk Excel Import
+  app.post("/api/participants/import", authenticateToken, async (req: any, res: any) => {
+    const { fileBase64 } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ error: "Excel base64 content required" });
+    }
+
+    try {
+      const buffer = Buffer.from(fileBase64, "base64");
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+
+      const worksheet = workbook.worksheets[0];
+      const importedParticipants: any[] = [];
+
+      worksheet.eachRow((row, rowNumber) => {
+        // Skip header row
+        if (rowNumber === 1) return;
+
+        const nombre = row.getCell(1).value?.toString()?.trim();
+        const apellido = row.getCell(2).value?.toString()?.trim();
+        const equipo = row.getCell(3).value?.toString()?.trim() || "";
+        const area = row.getCell(4).value?.toString()?.trim() || "";
+        
+        const pagoRaw = row.getCell(5).value?.toString()?.trim()?.toUpperCase();
+        const pago = pagoRaw === "SI" || pagoRaw === "YES" || pagoRaw === "TRUE" || pagoRaw === "PAGADO" || row.getCell(5).value === true;
+        
+        const participaRaw = row.getCell(6).value?.toString()?.trim()?.toUpperCase();
+        const participa = participaRaw !== "NO" && participaRaw !== "FALSE" && row.getCell(6).value !== false;
+
+        const medioPago = row.getCell(7).value?.toString()?.trim() || "";
+        const valor = Number(row.getCell(8).value) || 0;
+
+        if (nombre && apellido) {
+          importedParticipants.push({
+            nombre,
+            apellido,
+            equipo,
+            area,
+            pago,
+            participa,
+            numeroAsignado: null,
+            medioPago,
+            valor
+          });
+        }
+      });
+
+      // Override or append? We'll replace the existing list with the newly imported 52
+      await db.saveParticipantsBulk(importedParticipants);
+
+      await db.addLog({
+        accion: "IMPORTACION",
+        detalles: `Se importaron ${importedParticipants.length} participantes desde archivo Excel`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+
+      // Clear current event assignment state
+      await db.resetAll();
+
+      await broadcastParticipants();
+      await broadcastState();
+
+      res.json({ success: true, count: importedParticipants.length });
+    } catch (e: any) {
+      console.error("Excel import failure:", e);
+      res.status(500).json({ error: "Failed to parse Excel file: " + e.message });
+    }
+  });
+
+  // Get configuration
+  app.get("/api/config", async (req, res) => {
+    const config = await db.getConfig();
+    res.json(config);
+  });
+
+  // Update configuration
+  app.put("/api/config", authenticateToken, async (req: any, res: any) => {
+    const updated = await db.updateConfig(req.body);
+    await db.addLog({
+      accion: "CONFIGURACION_MODIFICADA",
+      detalles: "Se actualizó la configuración general del evento",
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+    await broadcastState();
+    res.json(updated);
+  });
+
+  // Get current event state
+  app.get("/api/event/state", async (req, res) => {
+    const state = await db.getState();
+    res.json(state);
+  });
+
+  // Get database connection status (MongoDB vs Local JSON fallback)
+  app.get("/api/db/status", async (req, res) => {
+    try {
+      const status = await db.getMongoStatus();
+      res.json(status);
+    } catch (e: any) {
+      res.status(500).json({ connected: false, error: e.message || String(e) });
+    }
+  });
+
+  // Update event status (LISTO, EJECUTANDO, PAUSADO, FINALIZADO)
+  app.post("/api/event/status", authenticateToken, async (req: any, res: any) => {
+    const { estado } = req.body;
+    if (!["LISTO", "EJECUTANDO", "PAUSADO", "FINALIZADO"].includes(estado)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const state = await db.updateState({ estado });
+    
+    await db.addLog({
+      accion: estado,
+      detalles: `El estado del evento cambió a: ${estado}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastState();
+    res.json(state);
+  });
+
+  // Algoritmo de Asignación: Fisher-Yates shuffle helper
+  const shuffleArray = (array: string[]) => {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
+  // Roll single random number for participant (Suspensful drawing)
+  app.post("/api/event/roll", authenticateToken, async (req: any, res: any) => {
+    const { participanteId } = req.body;
+    if (!participanteId) {
+      return res.status(400).json({ error: "Participant ID required" });
+    }
+
+    const state = await db.getState();
+    const participants = await db.getParticipants();
+    
+    const participant = participants.find(p => p._id?.toString() === participanteId || p.id?.toString() === participanteId);
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    // Exclude assigned numbers AND currently discarded numbers in this attempt
+    const excludedNumbers = new Set([
+      ...state.numerosAsignados,
+      ...state.descartadosEnEsteIntento
+    ]);
+
+    const remainingPool = state.numerosDisponibles.filter(num => !excludedNumbers.has(num));
+
+    if (remainingPool.length === 0) {
+      return res.status(400).json({ error: "No physical numbers available in requested range" });
+    }
+
+    // Fisher-Yates pick
+    const shuffled = shuffleArray(remainingPool);
+    const chosenNumber = shuffled[0];
+
+    // Update state to track selection proposing
+    const updatedState = await db.updateState({
+      participanteActualId: participanteId,
+      numeroPropuesto: chosenNumber,
+      estado: "EJECUTANDO"
+    });
+
+    // Generate custom random pre-roll sequence for UI flashing
+    // Fill sequence with random available numbers to flashing
+    const size = Math.min(15, remainingPool.length);
+    const flashShuffled = shuffleArray(remainingPool).slice(0, size);
+    if (!flashShuffled.includes(chosenNumber)) {
+      flashShuffled[flashShuffled.length - 1] = chosenNumber; // guarantee final targets chosen
+    }
+
+    await db.addLog({
+      accion: "PRE_ASIGNACION",
+      detalles: `Generando propuesta de asignación para: ${participant.nombre} ${participant.apellido}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastState();
+    
+    // Broadcast specialized roll animation triggers
+    io.emit("event:rolling", {
+      participantName: `${participant.nombre} ${participant.apellido}`,
+      sequence: flashShuffled,
+      targetNumber: chosenNumber
+    });
+
+    res.json({
+      chosenNumber,
+      sequence: flashShuffled,
+      state: updatedState
+    });
+  });
+
+  // Reroll/Relanzar proposed number (Discards proposed, adds to attempt's discarded set)
+  app.post("/api/event/reroll", authenticateToken, async (req: any, res: any) => {
+    const state = await db.getState();
+    if (!state.numeroPropuesto || !state.participanteActualId) {
+      return res.json({ success: true, state, message: "No proposed assignment to reroll" });
+    }
+
+    const discarded = state.numeroPropuesto;
+    const participantId = state.participanteActualId;
+    const updatedDiscards = [...state.descartadosEnEsteIntento, discarded];
+
+    const updatedState = await db.updateState({
+      numeroPropuesto: null,
+      descartadosEnEsteIntento: updatedDiscards
+    });
+
+    const participants = await db.getParticipants();
+    const p = participants.find(part => part._id?.toString() === participantId || part.id?.toString() === participantId);
+
+    await db.addLog({
+      accion: "RELANZAMIENTO",
+      detalles: `Número ${discarded} descartado para ${p ? p.nombre + " " + p.apellido : "participante"}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastState();
+    io.emit("event:rerolled", { discardedNumber: discarded, state: updatedState });
+
+    res.json({ success: true, state: updatedState });
+  });
+
+  // Confirm proposed assignment
+  app.post("/api/event/confirm", authenticateToken, async (req: any, res: any) => {
+    const state = await db.getState();
+    if (!state.numeroPropuesto || !state.participanteActualId) {
+      return res.json({ success: true, state, message: "No proposed assignment to confirm" });
+    }
+
+    const confirmedNumber = state.numeroPropuesto;
+    const participantId = state.participanteActualId;
+
+    // Persist assigned number to the participant
+    const updatedParticipant = await db.updateParticipant(participantId, {
+      numeroAsignado: confirmedNumber,
+      fechaAsignacion: new Date().toISOString()
+    });
+
+    if (!updatedParticipant) {
+      return res.status(404).json({ error: "Target participant not found" });
+    }
+
+    // Lock number in state: remove from available, add to assigned, reset attempt discards
+    const availableLeft = state.numerosDisponibles.filter(num => num !== confirmedNumber);
+    const assignedList = [...state.numerosAsignados, confirmedNumber];
+
+    const updatedState = await db.updateState({
+      participanteActualId: null,
+      numeroPropuesto: null,
+      numerosDisponibles: availableLeft,
+      numerosAsignados: assignedList,
+      descartadosEnEsteIntento: [], // reset discards for next person
+      estado: "EJECUTANDO"
+    });
+
+    await db.addLog({
+      accion: "NUMERO_CONFIRMADO",
+      detalles: `Asignación confirmada: Número ${confirmedNumber} asignado a ${updatedParticipant.nombre} ${updatedParticipant.apellido}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    
+    // Broadcast live confetti and celebration
+    io.emit("event:confirmed", {
+      participant: updatedParticipant,
+      number: confirmedNumber,
+      state: updatedState
+    });
+
+    res.json({ participant: updatedParticipant, state: updatedState });
+  });
+
+  // Mode: Auto Assignment ( Fisher-Yates assigns all active participants immediately )
+  app.post("/api/event/auto-assign", authenticateToken, async (req: any, res: any) => {
+    try {
+      const state = await db.getState();
+      const participants = await db.getParticipants();
+
+      // Find active participants without numbers assigned
+      const activeUnassigned = participants.filter(p => p.participa && !p.numeroAsignado);
+      if (activeUnassigned.length === 0) {
+        return res.status(400).json({ error: "No unassigned active participants found" });
+      }
+
+      // Check remaining physical numbers
+      const availableNumbers = [...state.numerosDisponibles];
+      if (availableNumbers.length < activeUnassigned.length) {
+        return res.status(400).json({ error: "Not enough physical numbers to distribute automatically" });
+      }
+
+      // Shuffle available numbers
+      const shuffledNumbers = shuffleArray(availableNumbers);
+
+      // Assign sequentially
+      const updatedParticipantsList = [...participants];
+      const newlyAssignedList: string[] = [];
+
+      for (let i = 0; i < activeUnassigned.length; i++) {
+        const p = activeUnassigned[i];
+        const num = shuffledNumbers[i];
+        p.numeroAsignado = num;
+        p.fechaAsignacion = new Date().toISOString();
+        newlyAssignedList.push(num);
+      }
+
+      // Save to database
+      await db.saveParticipantsBulk(updatedParticipantsList);
+
+      // Update state
+      const nextAvailable = availableNumbers.filter(n => !newlyAssignedList.includes(n));
+      const totalAssigned = [...state.numerosAsignados, ...newlyAssignedList];
+
+      const updatedState = await db.updateState({
+        estado: "FINALIZADO",
+        participanteActualId: null,
+        numeroPropuesto: null,
+        numerosDisponibles: nextAvailable,
+        numerosAsignados: totalAssigned,
+        descartadosEnEsteIntento: []
+      });
+
+      await db.addLog({
+        accion: "ASIGNACION_AUTOMATICA",
+        detalles: `Asignación automática masiva: Se distribuyeron ${activeUnassigned.length} números en lote en < 2 segundos`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+
+      await broadcastParticipants();
+      await broadcastState();
+      
+      io.emit("event:auto-assigned-complete", {
+        count: activeUnassigned.length,
+        state: updatedState
+      });
+
+      res.json({ success: true, count: activeUnassigned.length, state: updatedState });
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: "Auto assignment failed: " + e.message });
+    }
+  });
+
+  // Reset entire assignment progress
+  app.post("/api/event/reset", authenticateToken, async (req: any, res: any) => {
+    await db.resetAll();
+
+    await db.addLog({
+      accion: "REINICIO",
+      detalles: "El administrador reinició por completo todo el evento y liberó todos los números",
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    
+    io.emit("event:reset-complete");
+
+    res.json({ success: true });
+  });
+
+  // Get audit logs
+  app.get("/api/logs", async (req, res) => {
+    const logs = await db.getLogs();
+    res.json(logs);
+  });
+
+  // Export spreadsheet using ExcelJS
+  app.get("/api/export/excel", async (req, res) => {
+    try {
+      const participants = await db.getParticipants();
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Asignaciones");
+
+      sheet.columns = [
+        { header: "Nombre", key: "nombre", width: 25 },
+        { header: "Apellido", key: "apellido", width: 25 },
+        { header: "Equipo", key: "equipo", width: 20 },
+        { header: "Área", key: "area", width: 20 },
+        { header: "Pago", key: "pago", width: 12 },
+        { header: "Participa", key: "participa", width: 12 },
+        { header: "Número Asignado", key: "numero", width: 18 },
+        { header: "Medio de Pago", key: "medio", width: 18 },
+        { header: "Valor", key: "valor", width: 12 },
+        { header: "Fecha Asignación", key: "fecha", width: 25 }
+      ];
+
+      // Style header row
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFF" } };
+      sheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "0B1528" }
+      };
+
+      participants.forEach((p: any) => {
+        sheet.addRow({
+          nombre: p.nombre,
+          apellido: p.apellido,
+          equipo: p.equipo || "",
+          area: p.area || "",
+          pago: p.pago ? "SÍ" : "NO",
+          participa: p.participa ? "SÍ" : "NO",
+          numero: p.numeroAsignado || "NO ASIGNADO",
+          medio: p.medioPago || "",
+          valor: p.valor || 0,
+          fecha: p.fechaAsignacion ? new Date(p.fechaAsignacion).toLocaleString("es-ES") : ""
+        });
+      });
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=" + encodeURIComponent("Asignacion_Numeros_SorteoSOS.xlsx")
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (e: any) {
+      res.status(500).send("Export failed: " + e.message);
+    }
+  });
+
+  // Export raw CSV
+  app.get("/api/export/csv", async (req, res) => {
+    try {
+      const participants = await db.getParticipants();
+      let csv = "Nombre,Apellido,Equipo,Area,Pago,Participa,NumeroAsignado,MedioPago,Valor,FechaAsignacion\n";
+
+      participants.forEach((p: any) => {
+        csv += `"${p.nombre}","${p.apellido}","${p.equipo || ""}","${p.area || ""}","${p.pago ? "SI" : "NO"}","${p.participa ? "SI" : "NO"}","${p.numeroAsignado || ""}","${p.medioPago || ""}",${p.valor || 0},"${p.fechaAsignacion || ""}"\n`;
+      });
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=SorteoSOS_Asignaciones.csv");
+      res.send(csv);
+    } catch (e: any) {
+      res.status(500).send("Export CSV failed: " + e.message);
+    }
+  });
+
+  // Clear Audit Logs
+  app.post("/api/logs/clear", authenticateToken, async (req: any, res: any) => {
+    await db.clearLogs();
+    await db.addLog({
+      accion: "LIMPIEZA_LOGS",
+      detalles: "El administrador limpió el historial de auditoría",
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+    res.json({ success: true });
+  });
+
+  // --- WebSocket Connection ---
+  io.on("connection", (socket) => {
+    console.log("Client connected to SorteoSOS WebSockets");
+
+    socket.on("get:state", async () => {
+      const state = await db.getState();
+      const config = await db.getConfig();
+      const participants = await db.getParticipants();
+      socket.emit("state:changed", { state, config, participantsCount: participants.length });
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Client disconnected");
+    });
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  if (!process.env.VERCEL) {
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
+
+  return { app, server };
+}
+
+export const appPromise = startServer();
