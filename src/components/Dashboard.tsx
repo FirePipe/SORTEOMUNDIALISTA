@@ -119,12 +119,14 @@ export default function Dashboard() {
   // Robust automatic periodic polling (Vercel Compatibility Fallback)
   // Ensures that all 52 concurrent users see updates in real-time without having to reload (F5)
   useEffect(() => {
+    // Only poll frequently if we are NOT in the middle of an animation or if we are not the admin active tab
+    // For simplicity, let's just increase the interval to 8 seconds to reduce CPU load
     const interval = setInterval(() => {
       fetchEventState();
       fetchParticipants();
       fetchLogs();
       fetchDbStatus();
-    }, 4000);
+    }, 8000);
 
     return () => clearInterval(interval);
   }, []);

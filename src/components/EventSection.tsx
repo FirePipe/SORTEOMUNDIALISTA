@@ -48,7 +48,9 @@ export default function EventSection({
 
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
+  const [rollSpeed, setRollSpeed] = useState(50); // Speed in ms
   const [flashNumber, setFlashNumber] = useState(eventState.numeroPropuesto || '??');
+  const [isRelanzando, setIsRelanzando] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
 
   // Robust sync: Only update flashNumber if NOT currently animating
@@ -171,15 +173,27 @@ export default function EventSection({
       
       setIsFlashing(true);
       setConfettiActive(false);
-      setFlashNumber('??'); // Loading indicator
+      
+      // Start dummy flashing immediately to avoid "frozen" feeling
+      let isWaitingForAPI = true;
+      const runDummyFlash = () => {
+        if (!isWaitingForAPI) return;
+        const randomNum = Math.floor(Math.random() * 999).toString().padStart(3, '0');
+        setFlashNumber(randomNum);
+        if (appConfig.soundEnabled) audio.playTick(300);
+        flashIntervalRef.current = setTimeout(runDummyFlash, rollSpeed);
+      };
+      runDummyFlash();
 
       try {
         const res = await onRollNumber(participantId);
+        isWaitingForAPI = false;
+        if (flashIntervalRef.current) clearTimeout(flashIntervalRef.current);
+        
         const { chosenNumber, sequence } = res;
 
         let flashIdx = 0;
         const totalSteps = sequence.length;
-        const baseDelay = appConfig.tempoFlashing;
 
         const runFlash = () => {
           if (flashIdx < totalSteps) {
@@ -193,7 +207,8 @@ export default function EventSection({
             }
 
             flashIdx++;
-            const nextDelay = baseDelay + Math.pow(flashIdx / totalSteps, 2) * 150;
+            // Use rollSpeed as base, adding easing towards the end
+            const nextDelay = rollSpeed + Math.pow(flashIdx / totalSteps, 2) * 150;
             flashIntervalRef.current = setTimeout(runFlash, nextDelay);
           } else {
             // Final lock: Use chosenNumber directly
@@ -209,13 +224,10 @@ export default function EventSection({
           }
         };
 
-        // If sequence is too short, wait a bit for "drama"
-        if (totalSteps < 5) {
-          setTimeout(runFlash, 500);
-        } else {
-          runFlash();
-        }
+        runFlash();
       } catch (e) {
+        isWaitingForAPI = false;
+        if (flashIntervalRef.current) clearTimeout(flashIntervalRef.current);
         setIsFlashing(false);
         setFlashNumber('??');
         reject(e);
@@ -253,16 +265,17 @@ export default function EventSection({
       const currentParticipantId = selectedParticipantId || eventState.participanteActualId;
       if (!currentParticipantId) return;
 
+      setIsRelanzando(true);
+      setShowRerollConfirm(false);
       await onRerollNumber();
       setConfettiActive(false);
       setFlashNumber('??');
-      setShowRerollConfirm(false);
       
-      // Wait a tiny bit for state to settle before starting next roll
-      setTimeout(() => {
-        handleTriggerRoll(currentParticipantId);
-      }, 150);
+      // Trigger immediately with the locked participant ID
+      await handleTriggerRoll(currentParticipantId);
+      setIsRelanzando(false);
     } catch (e) {
+      setIsRelanzando(false);
       console.error(e);
     }
   };
@@ -639,7 +652,7 @@ export default function EventSection({
 
         {/* Bottom bar Control Actions for Admin */}
         <div className="relative z-20 border-t border-white/5 pt-5">
-          {!eventState.participanteActualId ? (
+          {(!eventState.participanteActualId && !isFlashing && !isRelanzando) ? (
             /* Phase 1: Select Participant and Trigger Draw */
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
               <div className="w-full sm:w-80 bg-[#0B1528] border border-blue-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
@@ -813,6 +826,25 @@ export default function EventSection({
                   >
                     Orden Aleatorio
                   </button>
+
+                  <div className="flex items-center gap-1.5 ml-auto pl-4 border-l border-white/10">
+                    <span className="text-[10px] text-gray-500 font-mono uppercase font-bold">Velocidad:</span>
+                    <div className="flex gap-1.5 bg-slate-900/50 p-1 rounded-full border border-white/5">
+                      {[30, 50, 80, 120].map((speed) => (
+                        <button
+                          key={speed}
+                          onClick={() => setRollSpeed(speed)}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                            rollSpeed === speed 
+                              ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {speed === 30 ? '🚀' : speed === 50 ? '⚡' : speed === 80 ? '⏱️' : '🐢'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <p className="text-gray-400 text-xs mt-2">
                   El sistema avanzará uno a uno garantizando que <span className="text-amber-300 font-semibold">los números nunca se repitan</span>. Introducirá pausas visuales estratégicas para que puedas verificar el resultado en el panel antes de confirmarlo.
