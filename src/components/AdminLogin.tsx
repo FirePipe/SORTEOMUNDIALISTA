@@ -104,7 +104,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           </button>
         </form>
 
-        {dbStatus && (
+        {dbStatus ? (
           <div className="mt-5 pt-4 border-t border-white/5 space-y-2">
             {dbStatus.connected ? (
               <div className="flex items-center gap-1.5 justify-center text-emerald-400 text-[10px] font-mono bg-emerald-500/5 border border-emerald-500/10 py-1 px-2.5 rounded-full w-fit mx-auto">
@@ -137,6 +137,11 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
                 </div>
               </div>
             )}
+          </div>
+        ) : (
+          <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-1.5 justify-center text-gray-500 text-[10px] font-mono bg-white/5 border border-white/5 py-1.5 px-3 rounded-full w-fit mx-auto">
+            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping" />
+            <span>Verificando conexión de base de datos...</span>
           </div>
         )}
       </motion.div>

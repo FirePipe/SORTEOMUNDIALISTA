@@ -268,7 +268,11 @@ let connectionPromise: Promise<void> | null = null;
 
 async function ensureConnected() {
   if (connectionPromise) {
-    await connectionPromise;
+    try {
+      await connectionPromise;
+    } catch (err) {
+      // Ignore errors here to allow useLocalFile fallback to work gracefully
+    }
   }
 }
 
@@ -369,9 +373,12 @@ async function seedMongo() {
   }
 }
 
-// Try to initialize MongoDB connection if requested
+// Try to initialize MongoDB connection if requested with fast fail-safe timeouts (2.5 seconds)
 if (MONGODB_URI) {
-  connectionPromise = mongoose.connect(MONGODB_URI)
+  connectionPromise = mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 2500, // Timeout for finding/selecting the cluster
+    connectTimeoutMS: 2500          // Timeout for the initial socket connection
+  })
     .then(async () => {
       console.log("Successfully connected to MongoDB at SorteoSOS");
       useLocalFile = false;

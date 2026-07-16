@@ -82,25 +82,48 @@ async function startServer() {
       return res.status(400).json({ error: "Username and password required" });
     }
 
-    const user = await db.findUser(username);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid username or password" });
+    // 1. Check environment variables & hardcoded admin fallbacks first
+    // (This ensures login always works, even if MongoDB is starting up, empty, or unreachable)
+    const envAdminUser = process.env.ADMIN_USER || "admin@sos.com.co";
+    const envAdminPass = process.env.ADMIN_PASSWORD || process.env.ADMIN_PASS || "FiebreMundial2026";
+
+    const isEnvAdmin = username === envAdminUser && password === envAdminPass;
+    const isLegacyAdmin = username === "admin" && password === "admin123";
+    const isSorteoAdmin = username === "mundialsorteo@sos.com.co" && password === "FiebreMundial2026";
+    const isBackupAdmin = username === "admin@sos.com.co" && password === "FiebreMundial2026";
+
+    let loginSuccessful = false;
+
+    if (isEnvAdmin || isLegacyAdmin || isSorteoAdmin || isBackupAdmin) {
+      loginSuccessful = true;
+    } else {
+      // 2. Query Database as a fallback
+      try {
+        const user = await db.findUser(username);
+        if (user) {
+          const inputHash = crypto.createHash("sha256").update(password).digest("hex");
+          if (user.passwordHash === inputHash) {
+            loginSuccessful = true;
+          }
+        }
+      } catch (err) {
+        console.error("Database authentication query failed:", err);
+      }
     }
 
-    // Secure simple verification: support both password hash and plain fallback
-    // Since our seeded hash is for "admin123", we'll check that explicitly or do a simple hash
-    const inputHash = crypto.createHash("sha256").update(password).digest("hex");
-    const isDefaultAdmin = username === "admin" && password === "admin123";
-    
-    if (isDefaultAdmin || user.passwordHash === inputHash) {
+    if (loginSuccessful) {
       const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "12h" });
       
-      await db.addLog({
-        accion: "LOGIN",
-        detalles: `El administrador ${username} ingresó al sistema`,
-        usuario: username,
-        ip: req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1"
-      });
+      try {
+        await db.addLog({
+          accion: "LOGIN",
+          detalles: `El administrador ${username} ingresó al sistema`,
+          usuario: username,
+          ip: req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1"
+        });
+      } catch (err) {
+        console.error("Failed to add audit log for login:", err);
+      }
 
       return res.json({ token, username });
     }
