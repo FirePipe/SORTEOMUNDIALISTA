@@ -223,6 +223,11 @@ async function startServer() {
 
       const worksheet = workbook.worksheets[0];
       const importedParticipants: any[] = [];
+      
+      // Override or append? We'll replace the existing list with the newly imported
+      await db.ParticipantModel.deleteMany({});
+      
+      const newAssignedNumbers = new Set<string>();
 
       worksheet.eachRow((row, rowNumber) => {
         // Skip header row
@@ -239,8 +244,18 @@ async function startServer() {
         const participaRaw = row.getCell(6).value?.toString()?.trim()?.toUpperCase();
         const participa = participaRaw !== "NO" && participaRaw !== "FALSE" && row.getCell(6).value !== false;
 
-        const medioPago = row.getCell(7).value?.toString()?.trim() || "";
-        const valor = Number(row.getCell(8).value) || 0;
+        const numeroAsignadoRaw = row.getCell(7).value?.toString()?.trim();
+        let numeroAsignado = null;
+        let fechaAsignacion = undefined;
+
+        if (numeroAsignadoRaw && /^\d+$/.test(numeroAsignadoRaw)) {
+          numeroAsignado = numeroAsignadoRaw.padStart(2, "0");
+          fechaAsignacion = new Date().toISOString();
+          newAssignedNumbers.add(numeroAsignado);
+        }
+
+        const medioPago = row.getCell(8).value?.toString()?.trim() || "";
+        const valor = Number(row.getCell(9).value) || 0;
 
         if (nombre && apellido) {
           importedParticipants.push({
@@ -250,30 +265,55 @@ async function startServer() {
             area,
             pago,
             participa,
-            numeroAsignado: null,
+            numeroAsignado,
+            fechaAsignacion,
             medioPago,
             valor
           });
         }
       });
 
-      // Override or append? We'll replace the existing list with the newly imported 52
-      await db.saveParticipantsBulk(importedParticipants);
+      await db.ParticipantModel.insertMany(importedParticipants);
+
+      // Rebuild the state based on the current config and the newly imported assigned numbers
+      let st = await db.StateModel.findOne({});
+      if (st) {
+        const min = st.config?.rangoMin || 1;
+        const max = st.config?.rangoMax || 999;
+        const habilitar00 = st.config?.habilitar00 || false;
+        
+        const newPool: string[] = [];
+        if (habilitar00) newPool.push("00");
+        for (let i = min; i <= max; i++) {
+          newPool.push(String(i).padStart(2, "0"));
+        }
+        
+        const availablePool = newPool.filter(n => !newAssignedNumbers.has(n));
+        const assignedArray = Array.from(newAssignedNumbers);
+
+        st.estado = "LISTO";
+        st.participanteActualId = null;
+        st.numeroPropuesto = null;
+        st.numerosDisponibles = availablePool;
+        st.numerosAsignados = assignedArray;
+        st.descartadosEnEsteIntento = [];
+        if (st.config) {
+          st.config.modoShow = false;
+          st.config.showCountdown = 0;
+        }
+        await st.save();
+      }
 
       await db.addLog({
         accion: "IMPORTACION",
-        detalles: `Se importaron ${importedParticipants.length} participantes desde archivo Excel`,
+        detalles: `Se importaron ${importedParticipants.length} participantes y se restauraron ${newAssignedNumbers.size} resultados desde archivo Excel`,
         usuario: req.user.username,
         ip: req.ip || "127.0.0.1"
       });
 
-      // Clear current event assignment state
-      await db.resetAll();
-
       await broadcastParticipants();
       await broadcastState();
-
-      res.json({ success: true, count: importedParticipants.length });
+      res.json({ success: true, count: importedParticipants.length, restored: newAssignedNumbers.size });
     } catch (e: any) {
       console.error("Excel import failure:", e);
       res.status(500).json({ error: "Failed to parse Excel file: " + e.message });
@@ -531,9 +571,51 @@ async function startServer() {
     res.json({ participant: updatedParticipant, state: updatedState });
   });
 
+  // Update Raffle Config (Range, 00, etc)
+  app.post("/api/event/config", authenticateToken, async (req: any, res: any) => {
+    const { rangoMin, rangoMax, habilitar00 } = req.body;
+    
+    // Validate range
+    const min = parseInt(rangoMin) || 1;
+    const max = parseInt(rangoMax) || 999;
+    
+    // Recalculate available numbers based on new range
+    const newPool: string[] = [];
+    if (habilitar00) newPool.push("00");
+    for (let i = min; i <= max; i++) {
+      newPool.push(String(i).padStart(2, "0"));
+    }
+
+    const updatedState = await db.updateState({
+      config: {
+        rangoMin: min,
+        rangoMax: max,
+        habilitar00: !!habilitar00,
+        modoShow: false,
+        showCountdown: 0
+      }
+    });
+
+    // El tablero se limpia automáticamente al cambiar el rango
+    // db.resetAll() uses the updated config to regenerate the clean pool of numbers
+    await db.resetAll();
+
+    await db.addLog({
+      accion: "CONFIG_CHANGE",
+      detalles: `Configuración actualizada y tablero reiniciado: Rango ${min}-${max}, 00: ${habilitar00 ? 'SÍ' : 'NO'}`,
+      usuario: req.user.username,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    await broadcastParticipants();
+    await broadcastState();
+    res.json(await db.getState());
+  });
+
   // Mode: Auto Assignment ( Fisher-Yates assigns all active participants immediately )
   app.post("/api/event/auto-assign", authenticateToken, async (req: any, res: any) => {
     try {
+      const { withShow } = req.body;
       const state = await db.getState();
       const participants = await db.getParticipants();
 
@@ -549,10 +631,65 @@ async function startServer() {
         return res.status(400).json({ error: "Not enough physical numbers to distribute automatically" });
       }
 
-      // Shuffle available numbers
-      const shuffledNumbers = shuffleArray(availableNumbers);
+      if (withShow) {
+        let countdown = 3;
+        const config = { ...(state.config || { rangoMin: 1, rangoMax: 999, habilitar00: false, modoShow: false, showCountdown: 0 }) };
+        
+        const runCountdown = async () => {
+          if (countdown > 0) {
+            await db.updateState({
+              config: { ...config, modoShow: true, showCountdown: countdown }
+            });
+            await broadcastState();
+            io.emit("event:show-countdown", { countdown });
+            countdown--;
+            setTimeout(runCountdown, 1000);
+          } else {
+            // Start shuffling phase
+            await db.updateState({
+              config: { ...config, modoShow: true, showCountdown: 0 } // 0 means shuffling
+            });
+            await broadcastState();
+            io.emit("event:shuffling-start", { duration: 3000 });
+            
+            setTimeout(async () => {
+              // Finalize assignment
+              const shuffledNumbers = shuffleArray(availableNumbers);
+              const updatedParticipantsList = [...participants];
+              const newlyAssignedList: string[] = [];
 
-      // Assign sequentially
+              for (let i = 0; i < activeUnassigned.length; i++) {
+                const p = activeUnassigned[i];
+                const num = shuffledNumbers[i];
+                p.numeroAsignado = num;
+                p.fechaAsignacion = new Date().toISOString();
+                newlyAssignedList.push(num);
+              }
+
+              await db.saveParticipantsBulk(updatedParticipantsList);
+              const nextAvailable = availableNumbers.filter(n => !newlyAssignedList.includes(n));
+              const totalAssigned = [...state.numerosAsignados, ...newlyAssignedList];
+
+              await db.updateState({
+                estado: "FINALIZADO",
+                numerosDisponibles: nextAvailable,
+                numerosAsignados: totalAssigned,
+                config: { ...config, modoShow: false, showCountdown: 0 }
+              });
+
+              await broadcastParticipants();
+              await broadcastState();
+              io.emit("event:auto-assigned-complete", { count: activeUnassigned.length });
+            }, 3000);
+          }
+        };
+
+        runCountdown();
+        return res.json({ success: true, message: "Countdown started" });
+      }
+
+      // Default behavior: Immediate assignment
+      const shuffledNumbers = shuffleArray(availableNumbers);
       const updatedParticipantsList = [...participants];
       const newlyAssignedList: string[] = [];
 
@@ -582,7 +719,7 @@ async function startServer() {
 
       await db.addLog({
         accion: "ASIGNACION_AUTOMATICA",
-        detalles: `Asignación automática masiva: Se distribuyeron ${activeUnassigned.length} números en lote en < 2 segundos`,
+        detalles: `Asignación automática masiva`,
         usuario: req.user.username,
         ip: req.ip || "127.0.0.1"
       });

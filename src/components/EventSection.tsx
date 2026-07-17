@@ -16,7 +16,7 @@ interface EventSectionProps {
   onRollNumber: (participantId: string) => Promise<{ chosenNumber: string; sequence: string[] }>;
   onRerollNumber: () => Promise<void>;
   onConfirmNumber: () => Promise<void>;
-  onAutoAssign: () => Promise<void>;
+  onAutoAssign: (withShow?: boolean) => Promise<void>;
   onResetEvent: () => Promise<void>;
   onUpdateConfig: (config: Partial<AppConfig>) => Promise<void>;
   dbStatus?: { connected: boolean; mode: string; uri: string; error: string | null };
@@ -936,7 +936,7 @@ export default function EventSection({
               <div>
                 <h4 className="text-slate-800 dark:text-white font-semibold text-sm">¿Reiniciar todo el SorteoSOS?</h4>
                 <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed mt-1">
-                  Esta acción es irreversible y requiere privilegios. Borrará absolutamente todas las asignaciones existentes en la base de datos MongoDB, liberando los 99 números y devolviendo el sorteo a su estado original listo.
+                  Esta acción es irreversible y requiere privilegios. Borrará absolutamente todas las asignaciones existentes en la base de datos MongoDB, liberando los números y devolviendo el sorteo a su estado original listo.
                 </p>
               </div>
             </div>
@@ -1192,13 +1192,22 @@ export default function EventSection({
               ¿Desea asignar de inmediato todos los participantes sin ceremonias visuales? El algoritmo distribuirá números aleatorios únicos de forma instantánea a los {unassignedParticipants.length} registrados en menos de 2 segundos, guardando todo directamente en MongoDB.
             </p>
           </div>
-          <button
-            onClick={onAutoAssign}
-            className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-bold text-xs px-5 py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
-          >
-            ASIGNAR TODOS AUTOMÁTICAMENTE
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <button
+              onClick={() => onAutoAssign(false)}
+              className="bg-blue-500 hover:bg-blue-400 text-white font-bold text-[10px] px-4 py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              ASIGNACIÓN INSTANTÁNEA
+            </button>
+            <button
+              onClick={() => onAutoAssign(true)}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs px-6 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30 transition-all cursor-pointer group"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
+              ASIGNAR CON INTRIGA (SHOW)
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

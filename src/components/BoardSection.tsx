@@ -1,21 +1,63 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Participant } from '../types';
+import { Participant, EventState } from '../types';
 import { 
   Shield, Sparkles, HelpCircle, CheckCircle, 
-  LayoutGrid, List, ArrowUpDown, Search, DollarSign, Filter
+  LayoutGrid, List, ArrowUpDown, Search, User, Hash, Calendar, Trophy, X
 } from 'lucide-react';
+
+// --- Sub-component: GoldenBall (Pure Tailwind 3D Sphere) ---
+const GoldenBall = React.memo(({ numero, onClick }: { numero: string, onClick?: () => void }) => {
+  return (
+    <div 
+      onClick={onClick}
+      className="relative w-12 h-12 md:w-14 md:h-14 group cursor-pointer transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-125 will-change-transform active:scale-95 z-0 hover:z-20"
+    >
+      {/* Floating Shadow */}
+      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4/5 h-1.5 bg-black/30 rounded-[100%] blur-md transition-all duration-500 group-hover:bg-black/50 group-hover:scale-125" />
+      
+      {/* Main Sphere Body with improved gradients and 3D effect */}
+      <div className="relative w-full h-full rounded-full ball-gold-3d flex items-center justify-center border border-[#B45309]/40 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.5)]">
+        {/* Glossy highlight */}
+        <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/30 to-transparent rounded-full blur-[3px] transform -rotate-12 pointer-events-none" />
+        
+        {/* Number Text */}
+        <span className="relative z-10 font-black text-lg md:text-xl text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)] select-none transition-transform duration-500 group-hover:scale-110">
+          {numero}
+        </span>
+      </div>
+
+      {/* Holographic sparkle effect on hover */}
+      <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 pointer-events-none" />
+    </div>
+  );
+});
 
 interface BoardSectionProps {
   participants: Participant[];
   currentProposedNumber: string | null;
+  eventState?: EventState; // Added eventState for config access
 }
 
-export default function BoardSection({ participants, currentProposedNumber }: BoardSectionProps) {
-  const [hoveredNumber, setHoveredNumber] = useState<string | null>(null);
+export default function BoardSection({ participants, currentProposedNumber, eventState }: BoardSectionProps) {
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [viewMode, setViewMode] = useState<'tablero' | 'lista'>('tablero');
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a' | 'num'>('num');
   const [searchQuery, setSearchQuery] = useState('');
+  const [shuffleValue, setShuffleValue] = useState('00');
+
+  // Shuffling logic for show mode
+  const isShuffling = eventState?.config?.modoShow && eventState?.config?.showCountdown === 0;
+  const showCountdown = eventState?.config?.modoShow && eventState?.config?.showCountdown && eventState.config.showCountdown > 0 ? eventState.config.showCountdown : null;
+
+  React.useEffect(() => {
+    if (isShuffling) {
+      const interval = setInterval(() => {
+        setShuffleValue(String(Math.floor(Math.random() * 100)).padStart(2, '0'));
+      }, 60);
+      return () => clearInterval(interval);
+    }
+  }, [isShuffling]);
 
   // Map numbers "01"-"99" to their participant if assigned
   const assignmentsMap = React.useMemo(() => {
@@ -28,8 +70,21 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
     return map;
   }, [participants]);
 
-  // Generate all numbers from 01 to 99
-  const numbers = Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, '0'));
+  // Generate numbers based on config
+  const numbers = React.useMemo(() => {
+    const config = eventState?.config || { rangoMin: 1, rangoMax: 999, habilitar00: true };
+    const list: string[] = [];
+    
+    if (config.habilitar00) {
+      list.push('00');
+    }
+    
+    for (let i = config.rangoMin; i <= config.rangoMax; i++) {
+      list.push(String(i).padStart(2, '0'));
+    }
+    
+    return list;
+  }, [eventState?.config]);
 
   const assignedCount = assignmentsMap.size;
   const totalParticipantsCount = participants.length;
@@ -178,92 +233,213 @@ export default function BoardSection({ participants, currentProposedNumber }: Bo
             </div>
           </div>
         </div>
-
-        {/* View Mode: TABLERO (Grid of 01 - 99) */}
-        {viewMode === 'tablero' && (          <div className="space-y-6">
-            <div className="flex items-center justify-between text-xs font-mono bg-slate-50 dark:bg-[#0B1528]/40 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/5">
-              <span className="text-slate-500 dark:text-gray-400">Pasa el cursor sobre un número para ver los detalles del participante asignado.</span>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-blue-900/90 dark:to-blue-950 border border-slate-300 dark:border-blue-500/40" />
-                  <span className="text-slate-500 dark:text-gray-400 text-[11px]">Disponible</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 border border-amber-400/80" />
-                  <span className="text-amber-600 dark:text-amber-400 text-[11px]">Asignado</span>
-                </div>
-                {currentProposedNumber && (
+        {/* View Mode: TABLERO (Grid of 25 - 99) */}
+        {viewMode === 'tablero' && (
+          <>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between text-xs font-mono bg-slate-50 dark:bg-[#0B1528]/40 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/5">
+                <span className="text-slate-500 dark:text-gray-400">Haz clic en un balón dorado para ver los detalles del participante asignado.</span>
+                <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-emerald-500 border border-emerald-300 animate-pulse" />
-                    <span className="text-emerald-500 dark:text-emerald-400 text-[11px]">Girando...</span>
+                    <span className="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-blue-500/40" />
+                    <span className="text-slate-500 dark:text-gray-400 text-[11px]">Disponible</span>
                   </div>
-                )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 border border-amber-400/80" />
+                    <span className="text-amber-600 dark:text-amber-400 text-[11px]">Asignado</span>
+                  </div>
+                  {currentProposedNumber && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500 border border-emerald-300 animate-pulse" />
+                      <span className="text-emerald-500 dark:text-emerald-400 text-[11px]">En Sorteo...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 lg:grid-cols-11 xl:grid-cols-13 gap-4 md:gap-6 justify-center">
+                {numbers.map((num) => {
+                  const assignedParticipant = assignmentsMap.get(num);
+                  const isAssigned = !!assignedParticipant;
+                  const isRollingActive = currentProposedNumber === num;
+
+                  return (
+                    <div
+                      key={num}
+                      className="flex justify-center items-center"
+                    >
+                      {isRollingActive ? (
+                        <motion.div 
+                          animate={{ scale: [1, 1.1, 1] }}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className="w-12 h-12 md:w-14 md:h-14 rounded-full ball-emerald-3d text-slate-950 flex items-center justify-center font-black text-lg border-2 border-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)] z-10"
+                        >
+                          {num}
+                        </motion.div>
+                      ) : isAssigned ? (
+                        <div className="relative group/ball">
+                          <GoldenBall 
+                            numero={num} 
+                            onClick={() => setSelectedParticipant(assignedParticipant)} 
+                          />
+                          
+                          {/* Hover Tooltip - Name & Surname in Uppercase */}
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-max max-w-[180px] bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-50 border border-white/10 dark:border-amber-400/50 text-center">
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900 dark:border-t-amber-500" />
+                            {assignedParticipant.nombre.toUpperCase()} {assignedParticipant.apellido.toUpperCase()}
+                          </div>
+                        </div>
+                      ) : isShuffling ? (
+                        <div
+                          className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-amber-500/40 bg-amber-500/10 flex items-center justify-center text-amber-500/80 font-black text-lg select-none animate-pulse"
+                        >
+                          {shuffleValue}
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 font-medium text-lg select-none cursor-default hover:border-blue-400/50 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors">
+                          {num}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Localized Countdown Overlay inside the Board Area */}
+                <AnimatePresence>
+                  {showCountdown && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 1.2 }}
+                      className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm rounded-[2rem] overflow-hidden"
+                    >
+                      {/* Dynamic Background Effects */}
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.2)_0%,transparent_70%)] animate-pulse" />
+                      <motion.div
+                        key={showCountdown}
+                        initial={{ scale: 0, opacity: 0, rotate: -45 }}
+                        animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                        exit={{ scale: 2, opacity: 0, rotate: 45 }}
+                        transition={{ type: 'spring', bounce: 0.5 }}
+                        className="relative w-64 h-64 md:w-80 md:h-80 ball-gold-3d rounded-full flex flex-col items-center justify-center shadow-[0_0_100px_rgba(245,158,11,0.8)] border-8 border-white/30"
+                      >
+                        <span className="text-8xl md:text-[140px] font-black text-[#1C160B] italic drop-shadow-[0_4px_4px_rgba(255,255,255,0.5)]">
+                          {showCountdown}
+                        </span>
+                        <span className="text-white text-xl md:text-2xl font-bold uppercase tracking-[0.2em] mt-2 drop-shadow-md bg-black/20 px-4 py-1 rounded-full">
+                          ¡PREPÁRATE!
+                        </span>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
-            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 xl:grid-cols-12 gap-3.5 justify-center">
-              {numbers.map((num) => {
-                const assignedParticipant = assignmentsMap.get(num);
-                const isAssigned = !!assignedParticipant;
-                const isRollingActive = currentProposedNumber === num;
-
-                return (
-                  <div
-                    key={num}
-                    className="relative group flex justify-center items-center w-12 h-12"
-                    onMouseEnter={() => setHoveredNumber(num)}
-                    onMouseLeave={() => setHoveredNumber(null)}
+            {/* Detail Modal Overlay - Football Card Style */}
+            <AnimatePresence>
+              {selectedParticipant && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl"
+                  onClick={() => setSelectedParticipant(null)}
+                >
+                  <motion.div
+                    initial={{ rotateY: 90, opacity: 0, scale: 0.8 }}
+                    animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+                    exit={{ rotateY: -90, opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", damping: 20, stiffness: 100 }}
+                    className="relative w-full max-w-[340px] aspect-[2/3] bg-gradient-to-b from-[#1C160B] to-[#0A0702] rounded-[2rem] p-0.5 shadow-[0_0_50px_rgba(230,194,128,0.2)] border border-amber-500/30 overflow-hidden"
+                    onClick={e => e.stopPropagation()}
                   >
-                    <div
-                      className={`
-                        w-full h-full rounded-full flex items-center justify-center font-mono text-[15px] font-extrabold cursor-pointer select-none relative overflow-hidden z-10 transition-all duration-150 active:scale-95 hover:scale-110
-                        ${isRollingActive
-                          ? 'bg-emerald-500 text-slate-950 font-black animate-pulse border border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                          : isAssigned
-                            ? 'bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-amber-950 border border-amber-300 font-black shadow-[0_2px_4px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_4px_rgba(0,0,0,0.4)]'
-                            : 'bg-slate-100 dark:bg-[#0C152B] text-slate-700 dark:text-blue-300/80 border border-slate-200 dark:border-blue-900/30 hover:bg-slate-200 dark:hover:bg-blue-900/40 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-blue-400'
-                        }
-                      `}
-                    >
-                      <span className={isAssigned ? 'font-black text-amber-950 text-base z-10' : ''}>
-                        {num}
-                      </span>
-                    </div>
+                    {/* Card Inner Glow & Patterns */}
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none" />
+                    <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
+                    
+                    <div className="relative h-full flex flex-col items-center p-6 border border-amber-500/20 rounded-[1.9rem] overflow-hidden">
+                      {/* Close Button */}
+                      <button 
+                        onClick={() => setSelectedParticipant(null)}
+                        className="absolute top-4 right-4 z-30 p-2 rounded-full bg-black/40 text-amber-500 hover:bg-black/60 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
 
-                    {isAssigned && assignedParticipant && (
-                      <span className="absolute bottom-1 right-1 bg-amber-200 dark:bg-[#1C160B] text-amber-900 dark:text-amber-300 border border-amber-400/30 text-[8px] font-sans font-extrabold px-1 rounded shadow-sm pointer-events-none scale-90 z-20">
-                        {assignedParticipant.nombre[0]}{assignedParticipant.apellido[0]}
-                      </span>
-                    )}
-
-                    {hoveredNumber === num && isAssigned && assignedParticipant && (
-                      <div className={`
-                        absolute z-50 bottom-full mb-3 w-64 bg-white dark:bg-slate-950 border border-amber-500/30 dark:border-amber-500/40 rounded-xl p-3 shadow-lg backdrop-blur-md text-left pointer-events-none animate-fade-in
-                        ${(Number(num) % 12 === 1 || Number(num) % 12 === 2) ? 'left-0' : (Number(num) % 12 === 0 || Number(num) % 12 === 11) ? 'right-0' : 'left-1/2 -translate-x-1/2'}
-                      `}>
-                        <div className={`absolute bottom-[-6px] w-3 h-3 bg-white dark:bg-slate-950 border-r border-b border-amber-500/30 dark:border-amber-500/40 rotate-45 ${(Number(num) % 12 === 1 || Number(num) % 12 === 2) ? 'left-4' : (Number(num) % 12 === 0 || Number(num) % 12 === 11) ? 'right-4' : 'left-1/2 -translate-x-1/2'}`} />
-                        <div className="flex items-start justify-between mb-1.5 pb-1 border-b border-slate-100 dark:border-white/10">
-                          <p className="text-amber-600 dark:text-amber-400 text-[10px] font-mono uppercase tracking-widest font-bold">Número Confirmado: {num}</p>
-                          {assignedParticipant.pago ? (
-                            <span className="text-[9px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 dark:border-emerald-500/30 px-1.5 py-0.5 rounded">Pagado</span>
-                          ) : (
-                            <span className="text-[9px] bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 dark:border-rose-500/30 px-1.5 py-0.5 rounded">Pendiente</span>
-                          )}
+                      {/* Header Section */}
+                      <div className="w-full flex justify-between items-start mb-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-4xl font-black text-amber-500 leading-none">
+                            {selectedParticipant.numeroAsignado}
+                          </span>
+                          <span className="text-[10px] font-bold text-amber-500/60 uppercase tracking-tighter">BOLETA</span>
                         </div>
-                        <p className="text-slate-800 dark:text-white font-bold text-sm leading-tight">
-                          {assignedParticipant.nombre} {assignedParticipant.apellido}
-                        </p>
-                        <div className="mt-1.5 space-y-1 text-[11px] text-slate-500 dark:text-gray-400">
-                          <p><span className="text-slate-400 dark:text-gray-500">Equipo:</span> {assignedParticipant.equipo || 'Sin Equipo'}</p>
-                          <p><span className="text-slate-400 dark:text-gray-500">Área:</span> {assignedParticipant.area || 'Sin Área'}</p>
+                        <div className="flex flex-col items-end">
+                          <Trophy className="w-8 h-8 text-amber-500/80 mb-1" />
+                          <div className="w-8 h-1 bg-amber-500 rounded-full" />
                         </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+
+                      {/* Visual Player Placeholder (Golden Ball) */}
+                      <div className="relative my-4 group">
+                        <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full animate-pulse" />
+                        <div className="relative w-32 h-32 ball-gold-3d rounded-full flex items-center justify-center border-4 border-amber-500/40 shadow-2xl">
+                           <span className="text-5xl font-black text-[#1C160B]">
+                             {selectedParticipant.numeroAsignado}
+                           </span>
+                        </div>
+                      </div>
+
+                      {/* Name & Info Card */}
+                      <div className="w-full text-center space-y-2 mt-4">
+                        <h3 className="text-2xl font-black text-white leading-tight uppercase tracking-tight drop-shadow-md">
+                          {selectedParticipant.nombre} <br/> {selectedParticipant.apellido}
+                        </h3>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-[9px] rounded-md uppercase">
+                            {selectedParticipant.equipo || 'GLOBAL'}
+                          </span>
+                          <span className="px-3 py-1 bg-white/10 text-amber-400 font-bold text-[9px] rounded-md uppercase border border-amber-500/20">
+                            {selectedParticipant.area || 'GENERAL'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Stats Section (FIFA Style) */}
+                      <div className="w-full grid grid-cols-2 gap-x-6 gap-y-3 mt-8 pt-6 border-t border-amber-500/20">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-bold text-amber-500/60 uppercase">PAGO</span>
+                          <span className={`text-[10px] font-black ${selectedParticipant.pago ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {selectedParticipant.pago ? 'OK' : 'PEND'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-bold text-amber-500/60 uppercase">RANGO</span>
+                          <span className="text-[10px] font-black text-white">TITULAR</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-bold text-amber-500/60 uppercase">PAÍS</span>
+                          <span className="text-[10px] font-black text-white">COL</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-bold text-amber-500/60 uppercase">DIV</span>
+                          <span className="text-[10px] font-black text-white">ORP</span>
+                        </div>
+                      </div>
+
+                      {/* Footer Badge */}
+                      <div className="mt-auto pt-6 w-full flex justify-center">
+                         <div className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-600 to-amber-400 rounded-full text-slate-950 font-black text-[10px] shadow-lg">
+                           SORTEOSOS 2026 OFFICIAL CARD
+                         </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         )}
 
         {/* View Mode: LISTA (Ordered list with filters and search) */}

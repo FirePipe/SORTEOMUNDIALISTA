@@ -232,6 +232,10 @@ class AudioEngine {
       console.warn('Audio play fanfare error:', e);
     }
   }
+
+  playSuccess() {
+    this.playSuccessFanfare();
+  }
 }
 
 export const audio = new AudioEngine();

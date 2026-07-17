@@ -104,6 +104,14 @@ interface ILog {
   ip?: string;
 }
 
+interface IRaffleConfig {
+  rangoMin: number;
+  rangoMax: number;
+  habilitar00: boolean;
+  modoShow: boolean;
+  showCountdown: number;
+}
+
 interface IState {
   estado: "LISTO" | "EJECUTANDO" | "PAUSADO" | "FINALIZADO";
   participanteActualId: string | null;
@@ -111,6 +119,7 @@ interface IState {
   numerosDisponibles: string[];
   numerosAsignados: string[];
   descartadosEnEsteIntento: string[];
+  config?: IRaffleConfig;
 }
 
 interface IConfig {
@@ -151,9 +160,16 @@ class LocalStore {
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
         numerosAsignados: [],
-        descartadosEnEsteIntento: []
+        descartadosEnEsteIntento: [],
+        config: {
+          rangoMin: 1,
+          rangoMax: 999,
+          habilitar00: false,
+          modoShow: false,
+          showCountdown: 0
+        }
       },
       config: {
         soundEnabled: true,
@@ -264,11 +280,23 @@ class LocalStore {
       numeroAsignado: null,
       fechaAsignacion: undefined
     }));
+    
+    const min = this.data.state.config?.rangoMin || 1;
+    const max = this.data.state.config?.rangoMax || 999;
+    const habilitar00 = this.data.state.config?.habilitar00 || false;
+    
+    const newPool: string[] = [];
+    if (habilitar00) newPool.push("00");
+    for (let i = min; i <= max; i++) {
+      newPool.push(String(i).padStart(2, "0"));
+    }
+
     this.data.state = {
+      ...this.data.state,
       estado: "LISTO",
       participanteActualId: null,
       numeroPropuesto: null,
-      numerosDisponibles: Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0")),
+      numerosDisponibles: newPool,
       numerosAsignados: [],
       descartadosEnEsteIntento: []
     };
@@ -325,7 +353,14 @@ const StateSchema = new mongoose.Schema({
   numeroPropuesto: { type: String, default: null },
   numerosDisponibles: { type: [String], default: [] },
   numerosAsignados: { type: [String], default: [] },
-  descartadosEnEsteIntento: { type: [String], default: [] }
+  descartadosEnEsteIntento: { type: [String], default: [] },
+  config: {
+    rangoMin: { type: Number, default: 1 },
+    rangoMax: { type: Number, default: 999 },
+    habilitar00: { type: Boolean, default: false },
+    modoShow: { type: Boolean, default: false },
+    showCountdown: { type: Number, default: 0 }
+  }
 }, { collection: "eventos" });
 
 const ConfigSchema = new mongoose.Schema({
@@ -373,9 +408,16 @@ async function seedMongo() {
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
         numerosAsignados: [],
-        descartadosEnEsteIntento: []
+        descartadosEnEsteIntento: [],
+        config: {
+          rangoMin: 1,
+          rangoMax: 999,
+          habilitar00: false,
+          modoShow: false,
+          showCountdown: 0
+        }
       });
     }
     const participantCount = await ParticipantModel.countDocuments();
@@ -506,9 +548,16 @@ export const db = {
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
         numerosAsignados: [],
-        descartadosEnEsteIntento: []
+        descartadosEnEsteIntento: [],
+        config: {
+          rangoMin: 1,
+          rangoMax: 999,
+          habilitar00: false,
+          modoShow: false,
+          showCountdown: 0
+        }
       });
     }
     return st;
@@ -568,12 +617,27 @@ export const db = {
     await ParticipantModel.updateMany({}, { $set: { numeroAsignado: null, fechaAsignacion: null } });
     let st = await StateModel.findOne({});
     if (st) {
+      const min = st.config?.rangoMin || 1;
+      const max = st.config?.rangoMax || 999;
+      const habilitar00 = st.config?.habilitar00 || false;
+      
+      const newPool: string[] = [];
+      if (habilitar00) newPool.push("00");
+      for (let i = min; i <= max; i++) {
+        newPool.push(String(i).padStart(2, "0"));
+      }
+
       st.estado = "LISTO";
       st.participanteActualId = null;
       st.numeroPropuesto = null;
-      st.numerosDisponibles = Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"));
+      st.numerosDisponibles = newPool;
       st.numerosAsignados = [];
       st.descartadosEnEsteIntento = [];
+      // Keep existing config
+      if (st.config) {
+        st.config.modoShow = false;
+        st.config.showCountdown = 0;
+      }
       await st.save();
     }
   },
@@ -586,6 +650,8 @@ export const db = {
       uri: MONGODB_URI ? MONGODB_URI.replace(/:([^@]+)@/, ":******@") : "Ninguna",
       error: lastError
     };
-  }
+  },
+  ParticipantModel,
+  StateModel
 };
 

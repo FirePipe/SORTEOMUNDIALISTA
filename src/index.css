@@ -55,57 +55,90 @@
 
 /* Unified 3D Spheres with proper outer glows */
 .ball-gold-3d {
-  background: radial-gradient(circle at 35% 35%, #FFFDF0 0%, #FFEFA0 15%, #F5C75D 35%, #D4AF37 55%, #927017 80%, #574006 100%) !important;
+  background: radial-gradient(circle at 35% 35%, 
+    #ffffff 0%, 
+    #fff9c4 5%, 
+    #fdd835 20%, 
+    #fbc02d 45%, 
+    #f57f17 75%, 
+    #4e342e 100%
+  ) !important;
   box-shadow: 
-    inset 0 -3px 6px rgba(0, 0, 0, 0.75),
-    inset 0 4px 6px rgba(255, 255, 255, 0.65) !important;
+    inset -8px -8px 20px rgba(0, 0, 0, 0.4),
+    inset 8px 8px 20px rgba(255, 255, 255, 0.6),
+    0 10px 20px -5px rgba(0, 0, 0, 0.3) !important;
   position: relative;
   overflow: hidden;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.ball-gold-3d::after {
+.ball-gold-3d:hover {
+  transform: scale(1.15) rotate(5deg);
+  z-index: 20;
+}
+
+.ball-gold-3d::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -70%;
-  width: 40%;
-  height: 200%;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  transform: rotate(25deg);
-  animation: ballShine 4s infinite ease-in-out;
+  top: 8%;
+  left: 12%;
+  width: 45%;
+  height: 35%;
+  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+  border-radius: 50%;
+  filter: blur(2px);
+  transform: rotate(-20deg);
   pointer-events: none;
 }
 
 .ball-emerald-3d {
-  background: radial-gradient(circle at 35% 35%, #E6FDF4 0%, #A7F3D0 15%, #34D399 35%, #059669 65%, #046A4E 85%, #022C22 100%) !important;
+  background: radial-gradient(circle at 35% 35%, 
+    #f0fff4 0%, 
+    #c6f6d5 10%, 
+    #48bb78 35%, 
+    #2f855a 65%, 
+    #22543d 85%, 
+    #064e3b 100%
+  ) !important;
   box-shadow: 
-    inset 0 -3px 6px rgba(0, 0, 0, 0.8),
-    inset 0 4px 6px rgba(255, 255, 255, 0.7) !important;
+    inset -8px -8px 20px rgba(0, 0, 0, 0.5),
+    inset 8px 8px 20px rgba(255, 255, 255, 0.5),
+    0 10px 20px -5px rgba(16, 185, 129, 0.3) !important;
   position: relative;
   overflow: hidden;
+  will-change: transform;
 }
 
-.ball-emerald-3d::after {
+.ball-emerald-3d::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -70%;
-  width: 40%;
-  height: 200%;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.5) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  transform: rotate(25deg);
-  animation: ballShine 2.5s infinite ease-in-out;
+  top: 8%;
+  left: 12%;
+  width: 45%;
+  height: 35%;
+  background: radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 70%);
+  border-radius: 50%;
+  filter: blur(2px);
+  transform: rotate(-20deg);
   pointer-events: none;
+}
+
+/* Perspective for the Game Card Flip */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
 }
 
 .ball-blue-3d {

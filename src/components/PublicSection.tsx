@@ -4,12 +4,33 @@ import { Participant, EventState, AppConfig } from '../types';
 import { audio } from '../utils/audio';
 import { Clock, ShieldCheck, Trophy, Sparkles, Activity } from 'lucide-react';
 import socketIOClient from 'socket.io-client';
+import confetti from 'canvas-confetti';
 
 interface PublicSectionProps {
   participants: Participant[];
   eventState: EventState;
   appConfig: AppConfig;
 }
+
+const triggerCelebration = () => {
+  const duration = 5 * 1000;
+  const animationEnd = Date.now() + duration;
+  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
+
+  const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+  const interval: any = setInterval(function() {
+    const timeLeft = animationEnd - Date.now();
+
+    if (timeLeft <= 0) {
+      return clearInterval(interval);
+    }
+
+    const particleCount = 50 * (timeLeft / duration);
+    confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+    confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+  }, 250);
+};
 
 export default function PublicSection({ participants, eventState, appConfig }: PublicSectionProps) {
   const [time, setTime] = useState(new Date().toLocaleTimeString('es-ES'));
@@ -210,8 +231,70 @@ export default function PublicSection({ participants, eventState, appConfig }: P
         area: 'Auditando...'
       } : null));
 
+  const [showCountdown, setShowCountdown] = useState<number | null>(null);
+  const [isShuffling, setIsShuffling] = useState(false);
+
+  // Sync shuffling state from config
+  useEffect(() => {
+    if (eventState?.config?.modoShow && eventState?.config?.showCountdown === 0) {
+      setIsShuffling(true);
+    } else {
+      setIsShuffling(false);
+    }
+  }, [eventState?.config]);
+
+  // Main flasher shuffling effect
+  useEffect(() => {
+    if (isShuffling) {
+      const interval = setInterval(() => {
+        setLocalFlasher(String(Math.floor(Math.random() * 100)).padStart(2, '0'));
+        if (appConfig.soundEnabled) audio.playTick(100);
+      }, 60);
+      return () => clearInterval(interval);
+    }
+  }, [isShuffling, appConfig.soundEnabled]);
+
+  // Socket Connection for Real-Time Show Mode
+  useEffect(() => {
+    const socket = socketIOClient(window.location.origin);
+    
+    socket.on('event:show-countdown', (data: { countdown: number }) => {
+      setShowCountdown(data.countdown);
+      if (data.countdown > 0 && appConfig.soundEnabled) {
+        audio.playTick(100 + data.countdown * 50);
+      }
+      if (data.countdown === 0) {
+        setTimeout(() => setShowCountdown(null), 2000);
+      }
+    });
+
+    socket.on('event:confirmed', (data: { participant: Participant; number: string }) => {
+      setLastWinner({
+        nombre: data.participant.nombre,
+        apellido: data.participant.apellido,
+        equipo: data.participant.equipo || '',
+        area: data.participant.area || ''
+      });
+      setShowCelebration(true);
+      if (appConfig.soundEnabled) audio.playSuccess();
+      triggerCelebration();
+    });
+
+    socket.on('event:auto-assigned-complete', () => {
+      setShowCelebration(true);
+      if (appConfig.soundEnabled) audio.playSuccess();
+      triggerCelebration();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [appConfig.soundEnabled]);
+
   return (
     <div className="relative min-h-[620px] bg-slate-50 dark:bg-[#020617] border border-slate-200 dark:border-blue-500/20 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden shadow-[0_0_80px_rgba(30,58,138,0.05)] dark:shadow-[0_0_80px_rgba(30,58,138,0.3)]">
+
+
       {/* Dynamic Background Elements */}
       <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-600/5 dark:bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-amber-500/3 dark:bg-amber-500/5 blur-[120px] rounded-full" />
@@ -314,14 +397,8 @@ export default function PublicSection({ participants, eventState, appConfig }: P
 
                   {/* 3D Realistic Ball */}
                   <div 
-                    className={`relative w-64 h-64 rounded-full flex items-center justify-center overflow-hidden border-[8px] border-slate-200 dark:border-[#2A3449] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.9)] ${isRolling ? 'ball-emerald-3d' : 'ball-gold-3d'}`}
+                    className={`relative w-64 h-64 rounded-full flex items-center justify-center border-[8px] border-slate-200 dark:border-[#2A3449] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.9)] ${isRolling ? 'ball-emerald-3d' : 'ball-gold-3d'}`}
                   >
-                    {/* Glossy Reflection Overlay */}
-                    <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/20 to-transparent rounded-full blur-[8px] transform -rotate-15 pointer-events-none" />
-                    
-                    {/* Inner lighting depth */}
-                    <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_20px_rgba(255,255,255,0.2),inset_0_-8px_30px_rgba(0,0,0,0.6)] pointer-events-none" />
-
                      {isRolling ? (
                        <div className="relative z-10 text-slate-950 font-black text-[120px] md:text-[140px] tracking-tighter">
                          {localFlasher.padStart(2, '0')}
@@ -364,34 +441,61 @@ export default function PublicSection({ participants, eventState, appConfig }: P
             </motion.div>
           ) : (
             <motion.div
-              key="waiting-state"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              key={showCountdown !== null && showCountdown > 0 ? `countdown-${showCountdown}` : "waiting-state"}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
               className="max-w-md space-y-8 py-16 flex flex-col items-center"
             >
-              <div className="relative">
-                <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 blur-3xl rounded-full" />
-                <div className="relative w-24 h-24 rounded-3xl bg-blue-500/5 dark:bg-blue-900/20 border border-blue-500/20 dark:border-blue-500/30 flex items-center justify-center shadow-2xl transform rotate-12">
-                  <ShieldCheck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h3 className="text-slate-800 dark:text-white text-2xl font-black uppercase tracking-tight">Sistema de Sorteo Seguro</h3>
-                <p className="text-slate-500 dark:text-gray-400 text-sm leading-relaxed font-medium">
-                  Listo para la siguiente asignación. El proceso utiliza aleatorización criptográfica distribuida y auditoría en tiempo real para garantizar total transparencia.
-                </p>
-              </div>
-              <div className="flex items-center gap-4 py-4">
-                 <div className="flex -space-x-3">
-                   {[1,2,3,4].map(i => (
-                     <div key={i} className={`w-8 h-8 rounded-full border-2 border-white dark:border-[#020617] bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center text-[10px] font-bold text-blue-600 dark:text-blue-300`}>
-                       {i}
+              {showCountdown !== null && showCountdown > 0 ? (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-amber-500/20 blur-3xl rounded-full" />
+                    <motion.div
+                      key={showCountdown}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 1.5, opacity: 0 }}
+                      className="relative w-44 h-44 rounded-full ball-gold-3d flex items-center justify-center shadow-[0_0_80px_rgba(245,158,11,0.5)] border-4 border-white/20"
+                    >
+                      <span className="text-[110px] font-black text-[#1C160B] italic drop-shadow-[0_2px_4px_rgba(255,255,255,0.4)]">
+                        {showCountdown}
+                      </span>
+                    </motion.div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-amber-500 text-2xl font-black uppercase tracking-widest animate-pulse">Iniciando Sorteo</h3>
+                    <p className="text-slate-500 dark:text-gray-400 text-sm font-bold">
+                      Preparando algoritmo de aleatorización en tiempo real...
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 blur-3xl rounded-full" />
+                    <div className="relative w-24 h-24 rounded-3xl bg-blue-500/5 dark:bg-blue-900/20 border border-blue-500/20 dark:border-blue-500/30 flex items-center justify-center shadow-2xl transform rotate-12">
+                      <ShieldCheck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-slate-800 dark:text-white text-2xl font-black uppercase tracking-tight">Sistema de Sorteo Seguro</h3>
+                    <p className="text-slate-500 dark:text-gray-400 text-sm leading-relaxed font-medium">
+                      Listo para la siguiente asignación. El proceso utiliza aleatorización criptográfica distribuida y auditoría en tiempo real para garantizar total transparencia.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 py-4">
+                     <div className="flex -space-x-3">
+                       {[1,2,3,4].map(i => (
+                         <div key={i} className={`w-8 h-8 rounded-full border-2 border-white dark:border-[#020617] bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center text-[10px] font-bold text-blue-600 dark:text-blue-300`}>
+                           {i}
+                         </div>
+                       ))}
                      </div>
-                   ))}
-                 </div>
-                 <span className="text-[10px] text-blue-600/60 dark:text-blue-500/60 font-bold uppercase tracking-widest">Protocolo de seguridad activo</span>
-              </div>
+                     <span className="text-[10px] text-blue-600/60 dark:text-blue-500/60 font-bold uppercase tracking-widest">Protocolo de seguridad activo</span>
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

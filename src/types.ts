@@ -23,6 +23,14 @@ export interface AuditLog {
   ip?: string;
 }
 
+export interface RaffleConfig {
+  rangoMin: number;
+  rangoMax: number;
+  habilitar00: boolean;
+  modoShow: boolean; // For the "intrigue" countdown
+  showCountdown: number; // Current countdown value
+}
+
 export interface EventState {
   estado: "LISTO" | "EJECUTANDO" | "PAUSADO" | "FINALIZADO";
   participanteActualId: string | null;
@@ -30,6 +38,7 @@ export interface EventState {
   numerosDisponibles: string[]; // array of "01" to "99"
   numerosAsignados: string[]; // array of "01" to "99"
   descartadosEnEsteIntento: string[]; // numbers discarded in the current roll
+  config?: RaffleConfig;
 }
 
 export interface AppConfig {

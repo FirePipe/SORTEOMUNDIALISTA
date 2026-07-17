@@ -10,11 +10,32 @@ import AuditSection from './AuditSection';
 import AdminLogin from './AdminLogin';
 import socketIOClient from 'socket.io-client';
 import { useTheme } from '../context/ThemeContext';
+import confetti from 'canvas-confetti';
 import { 
   Trophy, Users, Calendar, HelpCircle, LayoutDashboard, 
   TableProperties, Disc, LogOut, ShieldCheck, Play, Eye, Terminal, Lock,
-  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon, Home
+  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon, Home, Settings2, Wrench, Clock, Info, Save
 } from 'lucide-react';
+
+const triggerCelebration = () => {
+  const duration = 4 * 1000;
+  const animationEnd = Date.now() + duration;
+  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 3000 };
+
+  const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+  const interval: any = setInterval(function() {
+    const timeLeft = animationEnd - Date.now();
+
+    if (timeLeft <= 0) {
+      return clearInterval(interval);
+    }
+
+    const particleCount = 40 * (timeLeft / duration);
+    confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+    confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+  }, 250);
+};
 
 const CAROUSEL_IMAGES = [
   "https://lh3.googleusercontent.com/d/17FN25LvBbd26TWiEgm10KpwZts_5XcIM",
@@ -31,8 +52,16 @@ const CAROUSEL_IMAGES = [
 
 export default function Dashboard() {
   const { theme, toggleTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'inicio' | 'tablero' | 'participantes' | 'evento' | 'publico' | 'logs'>('inicio');
+  const [activeTab, setActiveTab] = useState<'inicio' | 'tablero' | 'participantes' | 'evento' | 'publico' | 'logs' | 'ajustes'>('inicio');
   
+  // Raffle Config Local State (to avoid immediate server sync)
+  const [localRaffleConfig, setLocalRaffleConfig] = useState({
+    rangoMin: 1,
+    rangoMax: 999,
+    habilitar00: false
+  });
+  const [configStatus, setConfigStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
+
   // App States
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [eventState, setEventState] = useState<EventState>({
@@ -63,6 +92,8 @@ export default function Dashboard() {
 
   // Connection State for adaptive fallback polling
   const [socketConnected, setSocketConnected] = useState(false);
+
+  const [showCountdown, setShowCountdown] = useState<number | null>(null);
 
   // Auth States
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
@@ -101,18 +132,32 @@ export default function Dashboard() {
       fetchParticipants();
       fetchLogs();
       fetchDbStatus();
+      if (appConfig.soundEnabled) audio.playSuccess();
+      triggerCelebration();
     });
 
     socket.on('event:auto-assigned-complete', () => {
       fetchParticipants();
       fetchLogs();
       fetchDbStatus();
+      if (appConfig.soundEnabled) audio.playSuccess();
+      triggerCelebration();
     });
 
     socket.on('event:reset-complete', () => {
       fetchParticipants();
       fetchLogs();
       fetchDbStatus();
+    });
+
+    socket.on('event:show-countdown', (data: { countdown: number }) => {
+      setShowCountdown(data.countdown);
+      if (data.countdown > 0 && appConfig.soundEnabled) {
+        audio.playTick(100 + data.countdown * 50);
+      }
+      if (data.countdown === 0) {
+        setTimeout(() => setShowCountdown(null), 2000);
+      }
     });
 
     return () => {
@@ -376,12 +421,63 @@ export default function Dashboard() {
     return data;
   };
 
-  const handleAutoAssign = async () => {
+  useEffect(() => {
+    if (eventState.config) {
+      setLocalRaffleConfig(prev => {
+        if (prev.rangoMin !== eventState.config!.rangoMin || 
+            prev.rangoMax !== eventState.config!.rangoMax ||
+            prev.habilitar00 !== eventState.config!.habilitar00) {
+          return {
+            rangoMin: eventState.config!.rangoMin,
+            rangoMax: eventState.config!.rangoMax,
+            habilitar00: eventState.config!.habilitar00
+          };
+        }
+        return prev;
+      });
+    }
+  }, [eventState.config?.rangoMin, eventState.config?.rangoMax, eventState.config?.habilitar00]);
+
+  const handleUpdateRaffleConfig = async () => {
+    // Validation
+    const poolSize = (localRaffleConfig.rangoMax - localRaffleConfig.rangoMin + 1) + (localRaffleConfig.habilitar00 ? 1 : 0);
+    
+    if (poolSize < participants.length) {
+      setConfigStatus({ 
+        type: 'error', 
+        message: `El rango (${poolSize} números) no puede ser inferior al total de participantes registrados (${participants.length}).` 
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/event/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(localRaffleConfig)
+      });
+      if (res.ok) {
+        setConfigStatus({ type: 'success', message: 'Configuración guardada correctamente.' });
+        fetchEventState();
+        setTimeout(() => setConfigStatus({ type: null, message: '' }), 3000);
+      }
+    } catch (e) {
+      console.error('Error updating raffle config:', e);
+      setConfigStatus({ type: 'error', message: 'Error al conectar con el servidor.' });
+    }
+  };
+
+  const handleAutoAssign = async (withShow: boolean = false) => {
     const res = await fetch('/api/event/auto-assign', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
-      }
+      },
+      body: JSON.stringify({ withShow })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -518,6 +614,16 @@ export default function Dashboard() {
               <Eye className="w-3.5 h-3.5" />
               <span>Proyectar</span>
             </button>
+            {token && (
+              <button
+                onClick={() => setActiveTab('ajustes')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'ajustes' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
+                title="Ajustes de Sorteo"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>Ajustes</span>
+              </button>
+            )}
             {token && (
               <button
                 onClick={() => setActiveTab('logs')}
@@ -820,16 +926,22 @@ export default function Dashboard() {
                       <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-black/40 rounded-2xl border border-slate-100 dark:border-white/5">
                         <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-mono text-sm text-blue-500 dark:text-blue-400 font-black shadow-lg">1</div>
                         <div className="space-y-1">
-                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Últimas 2 Cifras</p>
-                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">El ganador se define única y exclusivamente con las cifras finales del sorteo de Chontico Noche.</p>
+                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Sorteo Principal</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">Martes 21 de julio, 7:00 pm (Chontico noche)</p>
                         </div>
                       </div>
-
                       <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-black/40 rounded-2xl border border-slate-100 dark:border-white/5">
                         <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-sm text-amber-600 dark:text-amber-400 font-black shadow-lg">2</div>
                         <div className="space-y-1">
-                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Sorteo Garantizado</p>
-                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">Jugamos cada noche hasta que el número extraído coincida exactamente con un participante registrado.</p>
+                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Sorteo 2</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">Miércoles 22 de julio, 1:00 pm (Chontico día). (posibilidad si no cae en el principal)</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-black/40 rounded-2xl border border-slate-100 dark:border-white/5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-mono text-sm text-emerald-600 dark:text-emerald-400 font-black shadow-lg">3</div>
+                        <div className="space-y-1">
+                          <p className="text-slate-900 dark:text-white text-sm font-black uppercase tracking-wide">Sorteo 3</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-xs leading-relaxed">Miércoles 22 de Julio, 7:00 pm (Chontico noche). (posibilidad si no cae en el segundo intento)</p>
                         </div>
                       </div>
                     </div>
@@ -880,6 +992,7 @@ export default function Dashboard() {
               <BoardSection 
                 participants={participants} 
                 currentProposedNumber={eventState.numeroPropuesto} 
+                eventState={eventState}
               />
             </motion.div>
           )}
@@ -945,6 +1058,115 @@ export default function Dashboard() {
                 eventState={eventState}
                 appConfig={appConfig}
               />
+            </motion.div>
+          )}
+
+          {activeTab === 'ajustes' && (
+            <motion.div
+              key="ajustes"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
+            >
+              <div className="bg-white dark:bg-[#070D19]/80 border border-slate-200 dark:border-blue-500/10 p-8 rounded-3xl shadow-2xl backdrop-blur-xl max-w-2xl mx-auto">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                    <Wrench className="w-6 h-6 text-amber-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white">Dinámica del Sorteo</h2>
+                    <p className="text-slate-500 dark:text-gray-400 text-sm">Configura el rango de boletas y opciones de personalización</p>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  {/* Rango de Números */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                      <Layers className="w-4 h-4" />
+                      Rango de Boletas
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mínimo</label>
+                        <input 
+                          type="number"
+                          value={localRaffleConfig.rangoMin}
+                          onChange={(e) => {
+                            setLocalRaffleConfig({ ...localRaffleConfig, rangoMin: parseInt(e.target.value) || 0 });
+                            setConfigStatus({ type: null, message: '' });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#0B1528] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Máximo</label>
+                        <input 
+                          type="number"
+                          value={localRaffleConfig.rangoMax}
+                          onChange={(e) => {
+                            setLocalRaffleConfig({ ...localRaffleConfig, rangoMax: parseInt(e.target.value) || 0 });
+                            setConfigStatus({ type: null, message: '' });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#0B1528] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Número 00 */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0B1528] rounded-2xl border border-slate-200 dark:border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center font-bold text-amber-500">00</div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-white">Habilitar Número "00"</h4>
+                        <p className="text-[10px] text-slate-500">Incluye el doble cero en la tómbola del sorteo</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setLocalRaffleConfig({ ...localRaffleConfig, habilitar00: !localRaffleConfig.habilitar00 });
+                        setConfigStatus({ type: null, message: '' });
+                      }}
+                      className={`w-12 h-6 rounded-full transition-all relative ${localRaffleConfig.habilitar00 ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localRaffleConfig.habilitar00 ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* Status Message */}
+                  <AnimatePresence>
+                    {configStatus.type && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${configStatus.type === 'success' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'}`}
+                      >
+                        {configStatus.type === 'success' ? <ShieldCheck className="w-4 h-4" /> : <Info className="w-4 h-4" />}
+                        {configStatus.message}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <button
+                    onClick={handleUpdateRaffleConfig}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 rounded-2xl shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-5 h-5" />
+                    REINICIAR JUEGO Y GUARDAR CONFIG.
+                  </button>
+
+                  {/* Advertencia de Reset */}
+                  <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3">
+                    <Info className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                    <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
+                      <strong>Nota:</strong> Al guardar una nueva configuración de rango, el tablero se reiniciará automáticamente y todas las asignaciones actuales se borrarán. El rango configurado debe ser mayor o igual al total de participantes.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 

@@ -225,7 +225,7 @@ export default function TableSection({
             <FileSpreadsheet className="w-10 h-10 text-blue-500 dark:text-blue-400 mb-3 group-hover:text-amber-500 transition-colors" />
             <h3 className="text-slate-850 dark:text-white font-medium text-sm mb-1.5">Carga Masiva desde Excel</h3>
             <p className="text-slate-500 dark:text-gray-400 text-xs max-w-xs mb-4 leading-relaxed">
-              Sube la lista oficial de participantes. Las columnas requeridas son: Nombre, Apellido, Equipo, Área, Pago, Participa, Medio, Valor.
+              Sube la lista oficial de participantes para importación o <strong>restauración de resultados</strong>. Las columnas son: Nombre, Apellido, Equipo, Área, Pago, Participa, <strong>Nro. Asignado</strong>, Medio, Valor.
             </p>
             <label className="relative overflow-hidden bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/35 hover:border-blue-500/50 text-blue-600 dark:text-blue-300 text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer transition-all">
               Seleccionar Archivo Excel
