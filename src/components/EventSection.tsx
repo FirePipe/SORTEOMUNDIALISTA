@@ -253,6 +253,7 @@ export default function EventSection({
               audio.playBing();
               audio.playSuccessFanfare();
             }
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
             setConfettiActive(true);
             resolve(chosenNumber);
           }
@@ -465,6 +466,8 @@ export default function EventSection({
         const pId = nextParticipant._id || nextParticipant.id || '';
         setSeqCurrentName(`${nextParticipant.nombre} ${nextParticipant.apellido}`);
         setSelectedParticipantId(pId);
+        setFlashNumber('??');
+        setConfettiActive(false);
         setSeqStep('selecting');
         
         // Wait to read name on screen

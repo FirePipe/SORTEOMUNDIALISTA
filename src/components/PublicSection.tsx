@@ -277,12 +277,14 @@ export default function PublicSection({ participants, eventState, appConfig }: P
       });
       setShowCelebration(true);
       if (appConfig.soundEnabled) audio.playSuccess();
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       triggerCelebration();
     });
 
     socket.on('event:auto-assigned-complete', () => {
       setShowCelebration(true);
       if (appConfig.soundEnabled) audio.playSuccess();
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       triggerCelebration();
     });
 

@@ -239,10 +239,13 @@ async function startServer() {
         const area = row.getCell(4).value?.toString()?.trim() || "";
         
         const pagoRaw = row.getCell(5).value?.toString()?.trim()?.toUpperCase();
-        const pago = pagoRaw === "SI" || pagoRaw === "YES" || pagoRaw === "TRUE" || pagoRaw === "PAGADO" || row.getCell(5).value === true;
+        // Normalize accented "SÍ" to "SI"
+        const normalizedPagoRaw = pagoRaw?.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const pago = normalizedPagoRaw === "SI" || pagoRaw === "YES" || pagoRaw === "TRUE" || pagoRaw === "PAGADO" || row.getCell(5).value === true;
         
         const participaRaw = row.getCell(6).value?.toString()?.trim()?.toUpperCase();
-        const participa = participaRaw !== "NO" && participaRaw !== "FALSE" && row.getCell(6).value !== false;
+        const normalizedParticipaRaw = participaRaw?.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const participa = normalizedParticipaRaw === "SI" || participaRaw === "YES" || participaRaw === "TRUE" || row.getCell(6).value === true;
 
         const numeroAsignadoRaw = row.getCell(7).value?.toString()?.trim();
         let numeroAsignado = null;

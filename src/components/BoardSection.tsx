@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Participant, EventState } from '../types';
+import { Participant, EventState, AppConfig } from '../types';
+import { audio } from '../utils/audio';
 import { 
   Shield, Sparkles, HelpCircle, CheckCircle, 
   LayoutGrid, List, ArrowUpDown, Search, User, Hash, Calendar, Trophy, X
@@ -37,9 +38,10 @@ interface BoardSectionProps {
   participants: Participant[];
   currentProposedNumber: string | null;
   eventState?: EventState; // Added eventState for config access
+  appConfig: AppConfig; // Added appConfig for sound settings
 }
 
-export default function BoardSection({ participants, currentProposedNumber, eventState }: BoardSectionProps) {
+export default function BoardSection({ participants, currentProposedNumber, eventState, appConfig }: BoardSectionProps) {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [viewMode, setViewMode] = useState<'tablero' | 'lista'>('tablero');
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a' | 'num'>('num');
@@ -54,10 +56,14 @@ export default function BoardSection({ participants, currentProposedNumber, even
     if (isShuffling) {
       const interval = setInterval(() => {
         setShuffleValue(String(Math.floor(Math.random() * 100)).padStart(2, '0'));
+        if (appConfig.soundEnabled) {
+          audio.playTick(150 + Math.random() * 100);
+        }
+        if (navigator.vibrate) navigator.vibrate(20);
       }, 60);
       return () => clearInterval(interval);
     }
-  }, [isShuffling]);
+  }, [isShuffling, appConfig.soundEnabled]);
 
   // Map numbers "01"-"99" to their participant if assigned
   const assignmentsMap = React.useMemo(() => {

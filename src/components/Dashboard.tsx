@@ -141,6 +141,7 @@ export default function Dashboard() {
       fetchLogs();
       fetchDbStatus();
       if (appConfig.soundEnabled) audio.playSuccess();
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       triggerCelebration();
     });
 
@@ -993,6 +994,7 @@ export default function Dashboard() {
                 participants={participants} 
                 currentProposedNumber={eventState.numeroPropuesto} 
                 eventState={eventState}
+                appConfig={appConfig}
               />
             </motion.div>
           )}
