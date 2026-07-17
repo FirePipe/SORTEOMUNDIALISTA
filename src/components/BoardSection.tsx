@@ -19,9 +19,15 @@ const GoldenBall = React.memo(({ numero, onClick }: { numero: string, onClick?: 
       
       {/* Main Sphere Body with improved gradients and 3D effect */}
       <div className="relative w-full h-full rounded-full ball-gold-3d flex items-center justify-center border border-[#B45309]/40 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.5)]">
+        {/* Aura/Pulse Effect */}
+        <div className="absolute -inset-6 rounded-full bg-amber-400/50 blur-3xl animate-pulse opacity-0 group-hover/ball:opacity-100 transition-opacity duration-300" />
+        
         {/* Glossy highlight */}
         <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/30 to-transparent rounded-full blur-[3px] transform -rotate-12 pointer-events-none" />
         
+        {/* Soccer Pattern */}
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle, #704d05 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
+
         {/* Number Text */}
         <span className="relative z-10 font-black text-lg md:text-xl text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)] select-none transition-transform duration-500 group-hover:scale-110">
           {numero}
@@ -174,7 +180,7 @@ export default function BoardSection({ participants, currentProposedNumber, even
       </div>
 
       {/* Main Container */}
-      <div className="bg-white dark:bg-[#070D19]/80 backdrop-blur-xl border border-slate-200 dark:border-blue-500/10 rounded-2xl p-6 relative overflow-hidden shadow-2xl space-y-6">
+      <div className="bg-white dark:bg-[#070D19]/80 backdrop-blur-xl border border-slate-200 dark:border-blue-500/10 rounded-2xl p-6 relative shadow-2xl space-y-6">
         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-amber-500/15 to-transparent" />
 
@@ -286,11 +292,14 @@ export default function BoardSection({ participants, currentProposedNumber, even
                         <div className="relative group/ball">
                           <GoldenBall 
                             numero={num} 
-                            onClick={() => setSelectedParticipant(assignedParticipant)} 
+                            onClick={() => {
+                              audio.playSoftClick();
+                              setSelectedParticipant(assignedParticipant);
+                            }} 
                           />
                           
                           {/* Hover Tooltip - Name & Surname in Uppercase */}
-                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-max max-w-[180px] bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-50 border border-white/10 dark:border-amber-400/50 text-center">
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 min-w-[200px] max-w-[320px] bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-[100] border border-white/10 dark:border-amber-400/50 text-center">
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900 dark:border-t-amber-500" />
                             {assignedParticipant.nombre.toUpperCase()} {assignedParticipant.apellido.toUpperCase()}
                           </div>

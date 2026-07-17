@@ -168,11 +168,14 @@ export default function Dashboard() {
 
   // Sync initial setup and set up fallback interval + image slider interval
   useEffect(() => {
-    fetchParticipants();
-    fetchLogs();
-    fetchConfig();
-    fetchEventState();
-    fetchDbStatus();
+    const timer = setTimeout(() => {
+      fetchParticipants();
+      fetchLogs();
+      fetchConfig();
+      fetchEventState();
+      fetchDbStatus();
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [token]);
 
   // Robust automatic periodic polling (Vercel Compatibility Fallback)
@@ -613,7 +616,7 @@ export default function Dashboard() {
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Proyectar</span>
+              <span>Ver</span>
             </button>
             {token && (
               <button
@@ -682,175 +685,58 @@ export default function Dashboard() {
               transition={{ duration: 0.25, ease: "easeOut" }}
               className="space-y-10"
             >
-              {/* Thank You Note Section */}
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-2xl p-6 relative overflow-hidden"
-              >
-                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
-                <div className="flex items-start gap-4">
-                  <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                    <Users className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                      ¡Gracias por hacer esto posible, Equipo! 💙
-                    </h3>
-                    <p className="text-slate-600 dark:text-gray-300 text-xs leading-relaxed font-medium italic">
-                      "Queremos agradecer de corazón a cada uno de ustedes por sumarse al recaudo para el televisor de 50 pulgadas".
-                      <br /><br />
-                      Más allá de quién se lleve el premio a casa (¡mucha suerte a todos! 🍀), lo realmente valioso ha sido demostrar, una vez más, la fuerza y la unión que nos caracteriza como Gestión de Ingresos.
-                      <br /><br />
-                      Que este gran ambiente de compañerismo sea el impulso para seguir integrándonos y creciendo juntos en muchas más actividades. ¡Somos un gran equipo! 🚀🤝"
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Main Prize Feature Panel */}
-              <div className="relative overflow-hidden bg-white dark:bg-gradient-to-b dark:from-[#0C152B] dark:via-[#050D1C] dark:to-[#040810] border border-slate-200 dark:border-amber-500/20 rounded-3xl p-6 md:p-10 shadow-xl dark:shadow-2xl">
+              {/* Main Prize Feature Panel - Compacted */}
+              <div className="relative overflow-hidden bg-white dark:bg-gradient-to-b dark:from-[#0C152B] dark:via-[#050D1C] dark:to-[#040810] border border-slate-200 dark:border-amber-500/20 rounded-3xl p-4 md:p-6 shadow-xl dark:shadow-2xl">
                 <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
-                <div className="absolute -right-32 -top-32 w-96 h-96 bg-amber-500/5 rounded-full blur-[120px] pointer-events-none" />
-                <div className="absolute -left-32 -bottom-32 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 items-center relative z-10">
-                  {/* Left Column: TV visual design and badges */}
-                  <div className="lg:col-span-5 space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left">
-                    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-black px-3.5 py-1.5 rounded-full uppercase tracking-widest animate-pulse">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-                      Premio Mayor • Gran Sorteo
+                
+                <div className="flex flex-col lg:flex-row gap-6">
+                  {/* Left Column: TV Image */}
+                  <div className="lg:w-1/3 flex flex-col items-center">
+                    <div className="w-full aspect-video bg-slate-950 border-4 border-slate-850 rounded-xl p-1 shadow-[0_25px_60px_rgba(0,0,0,0.85)] relative group overflow-hidden">
+                      <img 
+                        src={CAROUSEL_IMAGES[currentImageIndex]} 
+                        alt="Premio"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-center"
+                      />
                     </div>
+                  </div>
 
-                    <div className="space-y-2">
-                      <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-none uppercase font-sans">
-                        Televisor HISENSE 50" QLED
-                      </h2>
-                      <p className="text-amber-600 dark:text-amber-400 text-sm md:text-base font-extrabold tracking-wide">
-                        Smart TV 50Q4SV • Experiencia de Cine en Casa
-                      </p>
-                    </div>
-
-                    {/* Stunning mock TV physical framing representing the Hisense TV */}
-                    <div className="w-full max-w-sm aspect-video bg-slate-950 border-4 border-slate-850 rounded-xl p-1 shadow-[0_25px_60px_rgba(0,0,0,0.85),_0_0_25px_rgba(230,194,128,0.2)] relative group overflow-hidden">
-                      {/* TV Stand Base mockup */}
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-[3px] bg-slate-700 z-30" />
-
-                      {/* Image Slide Panel */}
-                      <div className="w-full h-full relative rounded overflow-hidden">
-                        <img 
-                          src={CAROUSEL_IMAGES[currentImageIndex]} 
-                          alt={`SorteoSOS Premio ${currentImageIndex + 1}`}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover object-center transition-transform duration-750 group-hover:scale-105"
-                        />
-
-                        {/* Delicate physical glass reflection sheen overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none z-10" />
-                        <div className="absolute top-1 left-3 w-16 h-3 bg-white/15 rounded-full filter blur-[1px] transform -rotate-12 pointer-events-none z-10 opacity-65" />
-
-                        {/* HUD Overlay Label */}
-                        <div className="absolute bottom-2.5 left-2.5 bg-black/75 border border-white/10 px-2 py-0.5 rounded text-[9px] font-mono font-semibold text-amber-400 tracking-wider backdrop-blur-sm z-20">
-                          QLED SCREEN • FOTO {currentImageIndex + 1}/{CAROUSEL_IMAGES.length}
-                        </div>
-
-                        {/* Left/Right manual buttons */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentImageIndex((prev) => (prev - 1 + CAROUSEL_IMAGES.length) % CAROUSEL_IMAGES.length);
-                          }}
-                          className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-amber-400 hover:text-slate-950 border border-white/10 text-white flex items-center justify-center transition-all z-20 cursor-pointer opacity-0 group-hover:opacity-100"
-                          title="Anterior"
+                  {/* Right Column: Compacted Specs & Buttons */}
+                  <div className="lg:w-2/3 flex flex-col gap-4">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1 mb-2">
+                        <motion.h2
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="text-amber-500 font-black text-xs tracking-[0.2em] uppercase"
                         >
-                          <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-                        </button>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentImageIndex((prev) => (prev + 1) % CAROUSEL_IMAGES.length);
-                          }}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-amber-400 hover:text-slate-950 border border-white/10 text-white flex items-center justify-center transition-all z-20 cursor-pointer opacity-0 group-hover:opacity-100"
-                          title="Siguiente"
-                        >
-                          <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-                        </button>
-
-                        {/* Carousel Indicator Dots */}
-                        <div className="absolute bottom-2.5 right-2.5 flex gap-1 z-20 bg-black/50 px-1.5 py-1 rounded-full backdrop-blur-sm border border-white/5">
-                          {CAROUSEL_IMAGES.map((_, idx) => (
-                            <button
-                              key={idx}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCurrentImageIndex(idx);
-                              }}
-                              className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${currentImageIndex === idx ? 'bg-amber-400 w-3' : 'bg-gray-500 hover:bg-gray-300'}`}
-                            />
-                          ))}
-                        </div>
+                          GRAN PREMIO
+                        </motion.h2>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase">Televisor HISENSE 50" QLED</h2>
+                        <p className="text-amber-600 dark:text-amber-400 text-xs font-extrabold uppercase">50Q4SV • QLED UHD</p>
                       </div>
                     </div>
 
-                    {/* Highlight pill banner */}
-                    <div className="bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 px-5 py-3 rounded-2xl w-full">
-                      <p className="text-amber-600 dark:text-amber-400 text-xs font-mono uppercase tracking-widest font-black">50" Pantalla Gigante</p>
-                      <p className="text-slate-500 dark:text-gray-400 text-[11px] mt-0.5">Disfruta de la mejor calidad de imagen de ultra alta definición.</p>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Full specifications matrix table */}
-                  <div className="lg:col-span-7 space-y-6">
-                    <div className="border-b border-slate-200 dark:border-white/10 pb-3 flex items-center justify-between">
-                      <h3 className="text-sm font-mono text-slate-500 dark:text-gray-400 uppercase tracking-wider font-bold">Ficha Técnica Oficial</h3>
-                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400/80 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/10">Ref: 50Q4SV</span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] bg-slate-100 dark:bg-slate-900/50 p-4 rounded-xl">
+                      <div><span className="text-gray-500">Resolución:</span> <span className="font-bold text-slate-800 dark:text-slate-200">FHD</span></div>
+                      <div><span className="text-gray-500">Sistema:</span> <span className="font-bold text-slate-800 dark:text-slate-200">Vidaa</span></div>
+                      <div><span className="text-gray-500">Tamaño:</span> <span className="font-bold text-slate-800 dark:text-slate-200">50"</span></div>
+                      <div><span className="text-gray-500">Puertos:</span> <span className="font-bold text-slate-800 dark:text-slate-200">2 HDMI</span></div>
+                      <div><span className="text-gray-500">TDT:</span> <span className="font-bold text-slate-800 dark:text-slate-200">Sí</span></div>
+                      <div><span className="text-gray-500">Audio:</span> <span className="font-bold text-slate-800 dark:text-slate-200">12W</span></div>
+                      <div><span className="text-gray-500">Peso:</span> <span className="font-bold text-slate-800 dark:text-slate-200">7.4 kg</span></div>
+                      <div><span className="text-gray-500">Referencia:</span> <span className="font-bold text-slate-800 dark:text-slate-200">50Q4SV</span></div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
-                      {[
-                        { label: "Referencia", value: "50Q4SV" },
-                        { label: "Resolución", value: "Fhd (1920*1080)" },
-                        { label: "Tipo de pantalla", value: "QLED" },
-                        { label: "Sistema operativo", value: "Vidaa" },
-                        { label: "Tamaño", value: "50\" (127 cm)" },
-                        { label: "Smart TV", value: "Sí" },
-                        { label: "TDT", value: "Sí" },
-                        { label: "Dimensiones", value: "111.1 x 65.5 x 7.1 cm" },
-                        { label: "Puertos", value: "2 HDMI, 1 USB" },
-                        { label: "Audio", value: "12W" },
-                        { label: "Peso", value: "7.4 kg" },
-                      ].map((spec, i) => (
-                        <div 
-                          key={i} 
-                          className="flex items-center justify-between py-2 border-b border-slate-200/60 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 px-2 rounded transition-all"
-                        >
-                          <span className="text-slate-500 dark:text-gray-400 font-medium">{spec.label}</span>
-                          <span className="text-slate-900 dark:text-white font-extrabold text-right">{spec.value}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="pt-4 flex flex-col sm:flex-row gap-3">
-                      <button
-                        onClick={() => setActiveTab('tablero')}
-                        className="flex-1 bg-[#E6C280] hover:bg-[#d4b06a] text-slate-950 font-black text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-amber-500/15 cursor-pointer transition-all text-center uppercase tracking-wider"
-                      >
-                        Ver Balones en Tablero
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('publico')}
-                        className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-850 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-white font-bold text-xs px-6 py-3.5 rounded-xl cursor-pointer transition-all text-center uppercase tracking-wider"
-                      >
-                        Proyectar Sorteo (Pantalla Completa)
-                      </button>
+                    <div className="flex gap-3 mt-2">
+                      <button onClick={() => { audio.playSoftClick(); setTimeout(() => setActiveTab('tablero'), 150); }} className="flex-1 bg-[#E6C280] text-slate-950 font-black text-sm px-5 py-3 rounded-xl shadow uppercase hover:scale-105 transition-transform">Ver Tablero</button>
+                      <button onClick={() => { audio.playSoftClick(); setTimeout(() => setActiveTab('publico'), 150); }} className="flex-1 bg-[#E6C280] text-slate-950 font-black text-sm px-5 py-3 rounded-xl shadow uppercase hover:scale-105 transition-transform">Ver</button>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Sorteo Oficial & Dinámica del Juego Cards */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Dynamic Card: Sorteo Oficial */}
                 <motion.div 

@@ -56,17 +56,16 @@
 /* Unified 3D Spheres with proper outer glows */
 .ball-gold-3d {
   background: radial-gradient(circle at 35% 35%, 
-    #ffffff 0%, 
-    #fff9c4 5%, 
-    #fdd835 20%, 
-    #fbc02d 45%, 
-    #f57f17 75%, 
-    #4e342e 100%
+    #fffcf0 0%, 
+    #fceabb 20%, 
+    #d4af37 50%, 
+    #b8860b 80%, 
+    #704d05 100%
   ) !important;
   box-shadow: 
     inset -8px -8px 20px rgba(0, 0, 0, 0.4),
     inset 8px 8px 20px rgba(255, 255, 255, 0.6),
-    0 10px 20px -5px rgba(0, 0, 0, 0.3) !important;
+    0 5px 15px rgba(212, 175, 55, 0.3) !important;
   position: relative;
   overflow: hidden;
   will-change: transform;
@@ -76,19 +75,23 @@
 .ball-gold-3d:hover {
   transform: scale(1.15) rotate(5deg);
   z-index: 20;
+  box-shadow: 
+    inset -8px -8px 20px rgba(0, 0, 0, 0.4),
+    inset 8px 8px 20px rgba(255, 255, 255, 0.6),
+    0 15px 30px rgba(212, 175, 55, 0.4) !important;
 }
 
 .ball-gold-3d::before {
   content: '';
   position: absolute;
-  top: 8%;
-  left: 12%;
-  width: 45%;
-  height: 35%;
-  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+  top: 5%;
+  left: 10%;
+  width: 50%;
+  height: 40%;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
   border-radius: 50%;
-  filter: blur(2px);
-  transform: rotate(-20deg);
+  filter: blur(3px);
+  transform: rotate(-15deg);
   pointer-events: none;
 }
 
