@@ -1,6 +1,0 @@
-{
-  "name": "Sistema de Asignación de Números",
-  "description": "Sistema profesional de asignación aleatoria y auditable de números únicos para participantes registrados.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
