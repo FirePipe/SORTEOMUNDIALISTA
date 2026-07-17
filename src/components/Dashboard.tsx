@@ -616,7 +616,7 @@ export default function Dashboard() {
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${activeTab === 'publico' ? 'bg-[#E6C280] text-slate-950 shadow-md font-bold px-3' : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'}`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Ver</span>
+              <span>Sorteo</span>
             </button>
             {token && (
               <button
@@ -731,7 +731,7 @@ export default function Dashboard() {
 
                     <div className="flex gap-3 mt-2">
                       <button onClick={() => { audio.playSoftClick(); setTimeout(() => setActiveTab('tablero'), 150); }} className="flex-1 bg-[#E6C280] text-slate-950 font-black text-sm px-5 py-3 rounded-xl shadow uppercase hover:scale-105 transition-transform">Ver Tablero</button>
-                      <button onClick={() => { audio.playSoftClick(); setTimeout(() => setActiveTab('publico'), 150); }} className="flex-1 bg-[#E6C280] text-slate-950 font-black text-sm px-5 py-3 rounded-xl shadow uppercase hover:scale-105 transition-transform">Ver</button>
+                      <button onClick={() => { audio.playSoftClick(); setTimeout(() => setActiveTab('publico'), 150); }} className="flex-1 bg-[#E6C280] text-slate-950 font-black text-sm px-5 py-3 rounded-xl shadow uppercase hover:scale-105 transition-transform">Ver Sorteo</button>
                     </div>
                   </div>
                 </div>
