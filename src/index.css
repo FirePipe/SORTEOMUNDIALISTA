@@ -57,15 +57,15 @@
 .ball-gold-3d {
   background: radial-gradient(circle at 35% 35%, 
     #fffcf0 0%, 
-    #fceabb 20%, 
-    #d4af37 50%, 
-    #b8860b 80%, 
-    #704d05 100%
+    #ffd700 25%, 
+    #e6b800 55%, 
+    #b38600 80%, 
+    #664d00 100%
   ) !important;
   box-shadow: 
-    inset -8px -8px 20px rgba(0, 0, 0, 0.4),
-    inset 8px 8px 20px rgba(255, 255, 255, 0.6),
-    0 5px 15px rgba(212, 175, 55, 0.3) !important;
+    inset -6px -6px 14px rgba(0, 0, 0, 0.6),
+    inset 6px 6px 12px rgba(255, 255, 255, 0.8),
+    0 4px 12px rgba(179, 134, 0, 0.35) !important;
   position: relative;
   overflow: hidden;
   will-change: transform;
@@ -76,9 +76,9 @@
   transform: scale(1.15) rotate(5deg);
   z-index: 20;
   box-shadow: 
-    inset -8px -8px 20px rgba(0, 0, 0, 0.4),
-    inset 8px 8px 20px rgba(255, 255, 255, 0.6),
-    0 15px 30px rgba(212, 175, 55, 0.4) !important;
+    inset -6px -6px 14px rgba(0, 0, 0, 0.6),
+    inset 6px 6px 12px rgba(255, 255, 255, 0.8),
+    0 12px 24px rgba(179, 134, 0, 0.5) !important;
 }
 
 .ball-gold-3d::before {
@@ -90,7 +90,7 @@
   height: 40%;
   background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
   border-radius: 50%;
-  filter: blur(3px);
+  filter: blur(2px);
   transform: rotate(-15deg);
   pointer-events: none;
 }
@@ -186,4 +186,19 @@
     opacity: 0.75;
     box-shadow: 0 0 12px 3px rgba(212, 175, 55, 0.15);
   }
+}
+
+@keyframes winningCardPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.5), 0 0 32px rgba(251, 191, 36, 0.2), inset 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 28px rgba(251, 191, 36, 0.9), 0 0 54px rgba(245, 158, 11, 0.7), inset 0 0 15px rgba(255, 255, 255, 0.5);
+  }
+}
+
+.animate-winning-card-pulse {
+  animation: winningCardPulse 2.2s ease-in-out infinite !important;
 }

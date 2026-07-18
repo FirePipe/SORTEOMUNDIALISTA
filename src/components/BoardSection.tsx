@@ -2,40 +2,41 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Participant, EventState, AppConfig } from '../types';
 import { audio } from '../utils/audio';
+import { useGoldenBallCelebration } from './useGoldenBallCelebration';
 import { 
   Shield, Sparkles, HelpCircle, CheckCircle, 
   LayoutGrid, List, ArrowUpDown, Search, User, Hash, Calendar, Trophy, X
 } from 'lucide-react';
 
 // --- Sub-component: GoldenBall (Pure Tailwind 3D Sphere) ---
-const GoldenBall = React.memo(({ numero, onClick }: { numero: string, onClick?: () => void }) => {
+const GoldenBall = React.memo(({ numero, onClick, isWinner = false }: { numero: string, onClick?: () => void, isWinner?: boolean }) => {
   return (
     <div 
       onClick={onClick}
-      className="relative w-12 h-12 md:w-14 md:h-14 group cursor-pointer transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-125 will-change-transform active:scale-95 z-0 hover:z-20"
+      className={`relative w-12 h-12 md:w-14 md:h-14 group cursor-pointer transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-125 will-change-transform active:scale-95 z-0 hover:z-20 ${isWinner ? 'scale-110 z-10' : ''}`}
     >
       {/* Floating Shadow */}
-      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4/5 h-1.5 bg-black/30 rounded-[100%] blur-md transition-all duration-500 group-hover:bg-black/50 group-hover:scale-125" />
+      <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-4/5 h-1.5 rounded-[100%] blur-md transition-all duration-500 ${isWinner ? 'bg-amber-500/50 scale-125' : 'bg-black/30 group-hover:bg-black/50 group-hover:scale-125'}`} />
       
       {/* Main Sphere Body with improved gradients and 3D effect */}
-      <div className="relative w-full h-full rounded-full ball-gold-3d flex items-center justify-center border border-[#B45309]/40 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.5)]">
+      <div className={`relative w-full h-full rounded-full flex items-center justify-center border shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.5)] ${isWinner ? 'bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-500 border-yellow-200 shadow-[0_0_30px_rgba(251,191,36,0.8)] animate-winning-card-pulse' : 'ball-gold-3d border-[#B45309]/40'}`}>
         {/* Aura/Pulse Effect */}
-        <div className="absolute -inset-6 rounded-full bg-amber-400/50 blur-3xl animate-pulse opacity-0 group-hover/ball:opacity-100 transition-opacity duration-300" />
-        
+        <div className={`absolute -inset-6 rounded-full blur-3xl animate-pulse transition-opacity duration-300 ${isWinner ? 'bg-amber-400/80 opacity-100' : 'bg-amber-400/50 opacity-0 group-hover/ball:opacity-100'}`} />
+            
         {/* Glossy highlight */}
-        <div className="absolute top-[10%] left-[15%] w-[40%] h-[30%] bg-gradient-to-b from-white/30 to-transparent rounded-full blur-[3px] transform -rotate-12 pointer-events-none" />
-        
+        <div className={`absolute top-[10%] left-[15%] w-[40%] h-[30%] rounded-full blur-[3px] transform -rotate-12 pointer-events-none ${isWinner ? 'bg-gradient-to-b from-white/60 to-transparent' : 'bg-gradient-to-b from-white/30 to-transparent'}`} />
+            
         {/* Soccer Pattern */}
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle, #704d05 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
+        <div className={`absolute inset-0 ${isWinner ? 'opacity-30' : 'opacity-20'}`} style={{ backgroundImage: `radial-gradient(circle, ${isWinner ? '#b45309' : '#704d05'} 1px, transparent 1px)`, backgroundSize: '10px 10px' }}></div>
 
         {/* Number Text */}
-        <span className="relative z-10 font-black text-lg md:text-xl text-[#2A1D08] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)] select-none transition-transform duration-500 group-hover:scale-110">
+        <span className={`relative z-10 font-black text-lg md:text-xl drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)] select-none transition-transform duration-500 group-hover:scale-110 ${isWinner ? 'text-slate-900 drop-shadow-md' : 'text-[#2A1D08]'}`}>
           {numero}
         </span>
       </div>
 
       {/* Holographic sparkle effect on hover */}
-      <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 pointer-events-none" />
+      <div className={`absolute inset-0 rounded-full transition-opacity duration-700 bg-gradient-to-tr from-white/0 via-white/40 to-white/0 pointer-events-none ${isWinner ? 'opacity-100 animate-[spin_4s_linear_infinite]' : 'opacity-0 group-hover:opacity-100'}`} />
     </div>
   );
 });
@@ -49,6 +50,13 @@ interface BoardSectionProps {
 
 export default function BoardSection({ participants, currentProposedNumber, eventState, appConfig }: BoardSectionProps) {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const { triggerCelebration } = useGoldenBallCelebration();
+
+  // Safe helper to check if a participant's assigned number matches the event's winning number
+  const isGoldenWinnerParticipant = React.useCallback((p: Participant | null) => {
+    if (!p || !p.numeroAsignado || !eventState?.config?.numeroGanador) return false;
+    return String(p.numeroAsignado).padStart(2, '0') === String(eventState.config.numeroGanador).padStart(2, '0');
+  }, [eventState?.config?.numeroGanador]);
   const [viewMode, setViewMode] = useState<'tablero' | 'lista'>('tablero');
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a' | 'num'>('num');
   const [searchQuery, setSearchQuery] = useState('');
@@ -274,6 +282,7 @@ export default function BoardSection({ participants, currentProposedNumber, even
                   const assignedParticipant = assignmentsMap.get(num);
                   const isAssigned = !!assignedParticipant;
                   const isRollingActive = currentProposedNumber === num;
+                  const isGoldenWinner = !!eventState?.config?.numeroGanador && num === String(eventState.config.numeroGanador).padStart(2, '0');
 
                   return (
                     <div
@@ -288,21 +297,34 @@ export default function BoardSection({ participants, currentProposedNumber, even
                         >
                           {num}
                         </motion.div>
-                      ) : isAssigned ? (
+                      ) : isAssigned || isGoldenWinner ? (
                         <div className="relative group/ball">
-                          <GoldenBall 
+                          <GoldenBall
+                            isWinner={isGoldenWinner} 
                             numero={num} 
-                            onClick={() => {
-                              audio.playSoftClick();
+                            onClick={isAssigned ? () => {
+                              if (isGoldenWinner) {
+                                triggerCelebration();
+                              } else {
+                                audio.playSoftClick();
+                              }
                               setSelectedParticipant(assignedParticipant);
-                            }} 
+                            } : undefined} 
                           />
                           
                           {/* Hover Tooltip - Name & Surname in Uppercase */}
-                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 min-w-[200px] max-w-[320px] bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-[100] border border-white/10 dark:border-amber-400/50 text-center">
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900 dark:border-t-amber-500" />
-                            {assignedParticipant.nombre.toUpperCase()} {assignedParticipant.apellido.toUpperCase()}
-                          </div>
+                          {isAssigned && (
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 min-w-[200px] max-w-[320px] bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-[100] border border-white/10 dark:border-amber-400/50 text-center">
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900 dark:border-t-amber-500" />
+                              {assignedParticipant.nombre.toUpperCase()} {assignedParticipant.apellido.toUpperCase()}
+                            </div>
+                          )}
+                          {!isAssigned && isGoldenWinner && (
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-2xl opacity-0 group-hover/ball:opacity-100 translate-y-2 group-hover/ball:translate-y-0 transition-all duration-300 pointer-events-none z-[100] text-center">
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-amber-500" />
+                              BALÓN DE ORO (AÚN NO ASIGNADO)
+                            </div>
+                          )}
                         </div>
                       ) : isShuffling ? (
                         <div
@@ -366,14 +388,14 @@ export default function BoardSection({ participants, currentProposedNumber, even
                     animate={{ rotateY: 0, opacity: 1, scale: 1 }}
                     exit={{ rotateY: -90, opacity: 0, scale: 0.8 }}
                     transition={{ type: "spring", damping: 20, stiffness: 100 }}
-                    className="relative w-full max-w-[340px] aspect-[2/3] bg-gradient-to-b from-[#1C160B] to-[#0A0702] rounded-[2rem] p-0.5 shadow-[0_0_50px_rgba(230,194,128,0.2)] border border-amber-500/30 overflow-hidden"
+                    className={`relative w-full max-w-[340px] aspect-[2/3] bg-gradient-to-b rounded-[2rem] p-0.5 shadow-[0_0_50px_rgba(230,194,128,0.2)] border overflow-hidden ${isGoldenWinnerParticipant(selectedParticipant) ? 'from-amber-400 via-amber-600 to-amber-900 border-amber-300 shadow-[0_0_80px_rgba(251,191,36,0.6)]' : 'from-[#1C160B] to-[#0A0702] border-amber-500/30'}`}
                     onClick={e => e.stopPropagation()}
                   >
                     {/* Card Inner Glow & Patterns */}
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none" />
                     <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
-                    
-                    <div className="relative h-full flex flex-col items-center p-6 border border-amber-500/20 rounded-[1.9rem] overflow-hidden">
+                       
+                    <div className="relative h-full flex flex-col items-center p-6 border border-amber-500/20 rounded-[1.9rem] overflow-hidden bg-black/40">
                       {/* Close Button */}
                       <button 
                         onClick={() => setSelectedParticipant(null)}
@@ -381,26 +403,28 @@ export default function BoardSection({ participants, currentProposedNumber, even
                       >
                         <X className="w-4 h-4" />
                       </button>
-
+ 
                       {/* Header Section */}
                       <div className="w-full flex justify-between items-start mb-4">
                         <div className="flex flex-col items-center">
-                          <span className="text-4xl font-black text-amber-500 leading-none">
+                          <span className={`text-4xl font-black leading-none ${isGoldenWinnerParticipant(selectedParticipant) ? 'text-white' : 'text-amber-500'}`}>
                             {selectedParticipant.numeroAsignado}
                           </span>
-                          <span className="text-[10px] font-bold text-amber-500/60 uppercase tracking-tighter">BOLETA</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-tighter ${isGoldenWinnerParticipant(selectedParticipant) ? 'text-amber-200' : 'text-amber-500/60'}`}>
+                            {isGoldenWinnerParticipant(selectedParticipant) ? 'BALÓN DE ORO' : 'BOLETA'}
+                          </span>
                         </div>
                         <div className="flex flex-col items-end">
-                          <Trophy className="w-8 h-8 text-amber-500/80 mb-1" />
-                          <div className="w-8 h-1 bg-amber-500 rounded-full" />
+                          <Trophy className={`w-8 h-8 mb-1 ${isGoldenWinnerParticipant(selectedParticipant) ? 'text-amber-200 drop-shadow-[0_0_10px_rgba(251,191,36,1)]' : 'text-amber-500/80'}`} />
+                          <div className={`w-8 h-1 rounded-full ${isGoldenWinnerParticipant(selectedParticipant) ? 'bg-amber-200 shadow-[0_0_10px_rgba(251,191,36,1)]' : 'bg-amber-500'}`} />
                         </div>
                       </div>
-
+ 
                       {/* Visual Player Placeholder (Golden Ball) */}
                       <div className="relative my-4 group">
-                        <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full animate-pulse" />
-                        <div className="relative w-32 h-32 ball-gold-3d rounded-full flex items-center justify-center border-4 border-amber-500/40 shadow-2xl">
-                           <span className="text-5xl font-black text-[#1C160B]">
+                        <div className={`absolute inset-0 blur-2xl rounded-full animate-pulse ${isGoldenWinnerParticipant(selectedParticipant) ? 'bg-amber-300/60' : 'bg-amber-500/20'}`} />
+                        <div className={`relative w-32 h-32 rounded-full flex items-center justify-center border-4 shadow-2xl ${isGoldenWinnerParticipant(selectedParticipant) ? 'bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-600 border-yellow-200 shadow-[0_0_40px_rgba(251,191,36,0.8)]' : 'ball-gold-3d border-amber-500/40'}`}>
+                           <span className={`text-5xl font-black ${isGoldenWinnerParticipant(selectedParticipant) ? 'text-slate-900 drop-shadow-md' : 'text-[#1C160B]'}`}>
                              {selectedParticipant.numeroAsignado}
                            </span>
                         </div>

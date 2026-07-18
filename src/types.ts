@@ -28,7 +28,9 @@ export interface RaffleConfig {
   rangoMax: number;
   habilitar00: boolean;
   modoShow: boolean; // For the "intrigue" countdown
-  showCountdown: number; // Current countdown value
+  showCountdown: number;
+  habilitarBalonOro?: boolean;
+  numeroGanador?: string | null; // Current countdown value
 }
 
 export interface EventState {

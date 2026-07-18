@@ -55,10 +55,18 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'inicio' | 'tablero' | 'participantes' | 'evento' | 'publico' | 'logs' | 'ajustes'>('inicio');
   
   // Raffle Config Local State (to avoid immediate server sync)
-  const [localRaffleConfig, setLocalRaffleConfig] = useState({
+  const [localRaffleConfig, setLocalRaffleConfig] = useState<{
+    rangoMin: number;
+    rangoMax: number;
+    habilitar00: boolean;
+    habilitarBalonOro: boolean;
+    numeroGanador?: string | null;
+  }>({
     rangoMin: 1,
     rangoMax: 999,
-    habilitar00: false
+    habilitar00: false,
+    habilitarBalonOro: false,
+    numeroGanador: null
   });
   const [configStatus, setConfigStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
 
@@ -430,17 +438,21 @@ export default function Dashboard() {
       setLocalRaffleConfig(prev => {
         if (prev.rangoMin !== eventState.config!.rangoMin || 
             prev.rangoMax !== eventState.config!.rangoMax ||
-            prev.habilitar00 !== eventState.config!.habilitar00) {
+            prev.habilitar00 !== eventState.config!.habilitar00 ||
+            prev.habilitarBalonOro !== eventState.config!.habilitarBalonOro ||
+            prev.numeroGanador !== eventState.config!.numeroGanador) {
           return {
             rangoMin: eventState.config!.rangoMin,
             rangoMax: eventState.config!.rangoMax,
-            habilitar00: eventState.config!.habilitar00
+            habilitar00: eventState.config!.habilitar00,
+            habilitarBalonOro: !!eventState.config!.habilitarBalonOro,
+            numeroGanador: eventState.config!.numeroGanador || null
           };
         }
         return prev;
       });
     }
-  }, [eventState.config?.rangoMin, eventState.config?.rangoMax, eventState.config?.habilitar00]);
+  }, [eventState.config?.rangoMin, eventState.config?.rangoMax, eventState.config?.habilitar00, eventState.config?.habilitarBalonOro, eventState.config?.numeroGanador]);
 
   const handleUpdateRaffleConfig = async () => {
     // Validation
@@ -1023,6 +1035,53 @@ export default function Dashboard() {
                     </button>
                   </div>
 
+                  {/* Número Ganador Opcional */}
+                  <div className="space-y-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-5 h-5 text-amber-500" />
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800 dark:text-white">Habilitar Balón de Oro</h3>
+                          <p className="text-[10px] text-slate-500">Programa un número ganador para el sorteo</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setLocalRaffleConfig({ ...localRaffleConfig, habilitarBalonOro: !localRaffleConfig.habilitarBalonOro, numeroGanador: !localRaffleConfig.habilitarBalonOro ? localRaffleConfig.numeroGanador : null });
+                          setConfigStatus({ type: null, message: '' });
+                        }}
+                        className={`w-12 h-6 rounded-full transition-all relative ${localRaffleConfig.habilitarBalonOro ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localRaffleConfig.habilitarBalonOro ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    <AnimatePresence>
+                      {localRaffleConfig.habilitarBalonOro && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-3 overflow-hidden pt-2"
+                        >
+                          <p className="text-xs text-slate-600 dark:text-slate-400">
+                            Ingresa el número que ganará de forma garantizada:
+                          </p>
+                          <input 
+                            type="text"
+                            placeholder="Ej. 07"
+                            value={localRaffleConfig.numeroGanador || ''}
+                            onChange={(e) => {
+                              setLocalRaffleConfig({ ...localRaffleConfig, numeroGanador: e.target.value || null });
+                              setConfigStatus({ type: null, message: '' });
+                            }}
+                            className="w-full bg-white dark:bg-[#0B1528] border border-amber-500/30 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   {/* Status Message */}
                   <AnimatePresence>
                     {configStatus.type && (
@@ -1043,14 +1102,14 @@ export default function Dashboard() {
                     className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 rounded-2xl shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
                   >
                     <Save className="w-5 h-5" />
-                    REINICIAR JUEGO Y GUARDAR CONFIG.
+                    GUARDAR CONFIGURACIÓN
                   </button>
 
                   {/* Advertencia de Reset */}
                   <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3">
                     <Info className="w-5 h-5 text-blue-500 flex-shrink-0" />
                     <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-                      <strong>Nota:</strong> Al guardar una nueva configuración de rango, el tablero se reiniciará automáticamente y todas las asignaciones actuales se borrarán. El rango configurado debe ser mayor o igual al total de participantes.
+                      <strong>Nota:</strong> Si guardas una configuración de rango (mínimo, máximo o 00) diferente a la actual, el tablero se reiniciará automáticamente y las asignaciones se borrarán. Ajustar únicamente el Ganador Programado no reiniciará el juego.
                     </p>
                   </div>
                 </div>

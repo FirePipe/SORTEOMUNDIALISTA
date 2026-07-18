@@ -423,9 +423,15 @@ async function startServer() {
       return res.status(400).json({ error: "No physical numbers available in requested range" });
     }
 
-    // Fisher-Yates pick
-    const shuffled = shuffleArray(remainingPool);
-    const chosenNumber = shuffled[0];
+    let chosenNumber;
+    // Si hay un número ganador programado y aún está disponible, forzarlo a que salga
+    if (state.config?.numeroGanador && remainingPool.includes(state.config.numeroGanador)) {
+      chosenNumber = state.config.numeroGanador;
+    } else {
+      // Fisher-Yates pick
+      const shuffled = shuffleArray(remainingPool);
+      chosenNumber = shuffled[0];
+    }
 
     // Update state to track selection proposing
     const updatedState = await db.updateState({
@@ -576,7 +582,8 @@ async function startServer() {
 
   // Update Raffle Config (Range, 00, etc)
   app.post("/api/event/config", authenticateToken, async (req: any, res: any) => {
-    const { rangoMin, rangoMax, habilitar00 } = req.body;
+    console.log("RECEIVED CONFIG UPDATE:", req.body);
+    const { rangoMin, rangoMax, habilitar00, habilitarBalonOro, numeroGanador } = req.body;
     
     // Validate range
     const min = parseInt(rangoMin) || 1;
@@ -589,26 +596,55 @@ async function startServer() {
       newPool.push(String(i).padStart(2, "0"));
     }
 
+    const currentState = await db.getState();
+    const isRangeChanged = 
+      currentState.config?.rangoMin !== min || 
+      currentState.config?.rangoMax !== max || 
+      currentState.config?.habilitar00 !== !!habilitar00;
+
+    let formattedGanador = null;
+    if (habilitarBalonOro && numeroGanador) {
+      if (numeroGanador === "00" && habilitar00) {
+        formattedGanador = "00";
+      } else {
+        const numGanador = parseInt(numeroGanador);
+        if (!isNaN(numGanador)) {
+          formattedGanador = String(numGanador).padStart(2, "0");
+        }
+      }
+    }
+
     const updatedState = await db.updateState({
       config: {
         rangoMin: min,
         rangoMax: max,
         habilitar00: !!habilitar00,
         modoShow: false,
-        showCountdown: 0
+        showCountdown: 0,
+        habilitarBalonOro: !!habilitarBalonOro,
+        numeroGanador: formattedGanador
       }
     });
 
-    // El tablero se limpia automáticamente al cambiar el rango
-    // db.resetAll() uses the updated config to regenerate the clean pool of numbers
-    await db.resetAll();
+    if (isRangeChanged) {
+      // El tablero se limpia automáticamente al cambiar el rango
+      // db.resetAll() uses the updated config to regenerate the clean pool of numbers
+      await db.resetAll();
 
-    await db.addLog({
-      accion: "CONFIG_CHANGE",
-      detalles: `Configuración actualizada y tablero reiniciado: Rango ${min}-${max}, 00: ${habilitar00 ? 'SÍ' : 'NO'}`,
-      usuario: req.user.username,
-      ip: req.ip || "127.0.0.1"
-    });
+      await db.addLog({
+        accion: "CONFIG_CHANGE",
+        detalles: `Configuración actualizada y tablero reiniciado: Rango ${min}-${max}, 00: ${habilitar00 ? 'SÍ' : 'NO'}, Balón Oro: ${habilitarBalonOro ? 'SÍ' : 'NO'} (${numeroGanador || 'NINGUNO'})`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+    } else {
+      await db.addLog({
+        accion: "CONFIG_CHANGE",
+        detalles: `Configuración actualizada sin reiniciar tablero. Balón Oro: ${habilitarBalonOro ? 'SÍ' : 'NO'} (${numeroGanador || 'NINGUNO'})`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+    }
 
     await broadcastParticipants();
     await broadcastState();

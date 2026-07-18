@@ -391,15 +391,15 @@ export default function PublicSection({ participants, eventState, appConfig }: P
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
                 >
                   {/* Glowing halo behind */}
-                  <div className={`ball-glow-container ${isRolling ? 'glow-emerald animate-pulse opacity-90' : 'glow-amber opacity-70'}`} />
+                  <div className={`ball-glow-container ${isRolling ? 'glow-emerald animate-pulse opacity-90' : (localFlasher === eventState?.config?.numeroGanador ? 'bg-amber-400 blur-3xl animate-pulse opacity-100 scale-125' : 'glow-amber opacity-70')}`} />
                   
                   {/* Outer energy rings */}
-                  <div className="absolute inset-[-30px] rounded-full border border-blue-500/10 dark:border-blue-500/15 animate-[spin_12s_linear_infinite]" />
+                  <div className={`absolute inset-[-30px] rounded-full border border-blue-500/10 dark:border-blue-500/15 animate-[spin_12s_linear_infinite] ${localFlasher === eventState?.config?.numeroGanador ? 'border-amber-500/50 dark:border-amber-500/50 border-[4px]' : ''}`} />
                   <div className="absolute inset-[-15px] rounded-full border-t-2 border-r-2 border-amber-500/15 dark:border-amber-500/30 animate-[spin_4s_linear_infinite]" />
 
                   {/* 3D Realistic Ball */}
                   <div 
-                    className={`relative w-64 h-64 rounded-full flex items-center justify-center border-[8px] border-slate-200 dark:border-[#2A3449] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.9)] ${isRolling ? 'ball-emerald-3d' : 'ball-gold-3d'}`}
+                    className={`relative w-64 h-64 rounded-full flex items-center justify-center border-[8px] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.9)] ${isRolling ? 'border-slate-200 dark:border-[#2A3449] ball-emerald-3d' : (localFlasher === eventState?.config?.numeroGanador ? 'bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-600 border-yellow-200 shadow-[0_0_80px_rgba(251,191,36,0.8)] animate-pulse' : 'border-slate-200 dark:border-[#2A3449] ball-gold-3d')}`}
                   >
                      {isRolling ? (
                        <div className="relative z-10 text-slate-950 font-black text-[120px] md:text-[140px] tracking-tighter">
@@ -413,7 +413,7 @@ export default function PublicSection({ participants, eventState, appConfig }: P
                          transition={{ type: "spring", stiffness: 400, damping: 15 }}
                          className="relative z-10"
                        >
-                         <span className="text-[120px] md:text-[140px] font-black tracking-tighter text-[#1C160B] drop-shadow-[0_1px_2px_rgba(255,255,255,0.4)]">
+                         <span className={`text-[120px] md:text-[140px] font-black tracking-tighter drop-shadow-[0_1px_2px_rgba(255,255,255,0.4)] ${localFlasher === eventState?.config?.numeroGanador ? 'text-white' : 'text-[#1C160B]'}`}>
                            {localFlasher.padStart(2, '0')}
                          </span>
                        </motion.div>
