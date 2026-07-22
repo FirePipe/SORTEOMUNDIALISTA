@@ -14,7 +14,8 @@ import confetti from 'canvas-confetti';
 import { 
   Trophy, Users, Calendar, HelpCircle, LayoutDashboard, 
   TableProperties, Disc, LogOut, ShieldCheck, Play, Eye, Terminal, Lock,
-  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon, Home, Settings2, Wrench, Clock, Info, Save, Loader2
+  Tv, Sparkles, Cpu, Layers, ChevronLeft, ChevronRight, Sun, Moon, Home, Settings2, Wrench, Clock, Info, Save, Loader2,
+  Database, RefreshCw, AlertTriangle, CheckCircle, Server
 } from 'lucide-react';
 
 function DashboardSkeleton() {
@@ -138,12 +139,34 @@ export default function Dashboard() {
   });
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isDbLocal, setIsDbLocal] = useState(true);
-  const [dbStatus, setDbStatus] = useState<{ connected: boolean; mode: string; uri: string; error: string | null }>({
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [isReconnectingDb, setIsReconnectingDb] = useState(false);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; mode: string; uri: string; error: string | null; dbName?: string }>({
     connected: false,
     mode: 'Cargando...',
     uri: '',
     error: null
   });
+
+  const handleReconnectDb = async () => {
+    setIsReconnectingDb(true);
+    try {
+      const res = await fetch('/api/db/reconnect', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status) {
+          setDbStatus(data.status);
+          setIsDbLocal(!data.status.connected);
+        }
+      }
+      fetchParticipants(true);
+      fetchDbStatus(true);
+    } catch (e) {
+      console.error('Error reconnecting DB:', e);
+    } finally {
+      setIsReconnectingDb(false);
+    }
+  };
 
   // Carousel Image index
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -807,7 +830,20 @@ export default function Dashboard() {
           </nav>
 
           {/* Theme Toggle & Admin Auth Pill */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setShowDbModal(true)}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                dbStatus?.connected
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                  : 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 animate-pulse'
+              }`}
+              title="Estado de Base de Datos"
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span className="hidden md:inline font-mono">{dbStatus?.connected ? 'MongoDB Atlas' : 'BD Fallback'}</span>
+            </button>
+
             <button
               onClick={toggleTheme}
               className="p-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-amber-400 transition-all cursor-pointer shadow-sm"
@@ -1301,11 +1337,102 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-gray-500">
           <p className="font-mono">© 2026 SorteoSOS • PROCESO COMPLETAMENTE AUDITADO • TODOS LOS DERECHOS RESERVADOS</p>
           <div className="flex gap-4 font-mono text-[10px]">
-            <p>DB: MongoDB Cloud (SorteoSOS)</p>
+            <p>DB: {dbStatus?.connected ? 'MongoDB Atlas' : 'Local Fallback'}</p>
             <p>WS ID: socket-active</p>
           </div>
         </div>
       </footer>
+
+      {/* DB Connection Status & Diagnostics Modal */}
+      {showDbModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-[#0B1528] border border-slate-200 dark:border-blue-500/20 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative space-y-5 text-slate-800 dark:text-white">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-2xl ${dbStatus?.connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Estado de la Base de Datos</h3>
+                  <p className="text-xs text-gray-500 font-mono">SorteoSOS • Mongoose Storage Engine</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDbModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5">
+                <span className="text-gray-500 font-medium">Estado de Conexión:</span>
+                <span className={`font-bold flex items-center gap-1.5 ${dbStatus?.connected ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  {dbStatus?.connected ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Conectado a MongoDB Atlas
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      Modo Archivo Local (Fallback)
+                    </>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5">
+                <span className="text-gray-500 font-medium">Base de Datos:</span>
+                <span className="font-mono font-bold text-amber-400">{dbStatus?.dbName || "sorteosos"}</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 space-y-1">
+                <span className="text-gray-500 font-medium block">Cadena de Conexión (URI):</span>
+                <p className="font-mono text-[11px] text-slate-600 dark:text-slate-300 break-all bg-black/20 p-2 rounded-lg border border-white/5">
+                  {dbStatus?.uri || 'No especificada'}
+                </p>
+              </div>
+
+              {dbStatus?.error && (
+                <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 space-y-1">
+                  <span className="font-bold flex items-center gap-1 text-xs">
+                    <AlertTriangle className="w-4 h-4" /> Último error detectado:
+                  </span>
+                  <p className="font-mono text-[11px] leading-relaxed break-words bg-black/20 p-2 rounded-lg">
+                    {dbStatus.error}
+                  </p>
+                </div>
+              )}
+
+              {!dbStatus?.connected && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 space-y-2">
+                  <p className="font-bold text-xs">Instrucciones para conectar MongoDB Atlas en Vercel:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                    <li>Ingresa a tu cuenta de <strong>MongoDB Atlas</strong>.</li>
+                    <li>Ve a <strong>Network Access</strong> → Haz clic en <strong>Add IP Address</strong>.</li>
+                    <li>Selecciona <strong>Allow Access from Anywhere</strong> (<code>0.0.0.0/0</code>) para permitir peticiones desde Vercel.</li>
+                    <li>En Vercel, en <strong>Project Settings → Environment Variables</strong>, asegúrate de tener <code>MONGODB_URI</code>.</li>
+                    <li>Haz clic en el botón de abajo para reconectar.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleReconnectDb}
+                disabled={isReconnectingDb}
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isReconnectingDb ? 'animate-spin' : ''}`} />
+                <span>{isReconnectingDb ? 'Intentando Conexión...' : 'Reconectar MongoDB Atlas'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

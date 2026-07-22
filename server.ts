@@ -835,6 +835,26 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Mongo DB Status & Reconnect
+  app.get(["/api/mongo-status", "/api/db/status"], async (req, res) => {
+    try {
+      const status = await db.getMongoStatus();
+      res.json(status);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post(["/api/mongo-reconnect", "/api/db/reconnect"], async (req, res) => {
+    try {
+      const connected = await db.reconnect();
+      const status = await db.getMongoStatus();
+      res.json({ success: connected, status });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Get audit logs
   app.get("/api/logs", async (req, res) => {
     const logs = await db.getLogs();

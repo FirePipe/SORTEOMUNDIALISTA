@@ -4,13 +4,40 @@ import path from "path";
 import crypto from "crypto";
 
 // Check if we can connect to MongoDB
-const DEFAULT_MONGO_URI = "mongodb+srv://pipeblox_db_user:vWxgn7jStYq2xzQH@cluster0.1rnexaj.mongodb.net/";
-let MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGO_URI;
+const DEFAULT_MONGO_URI = "mongodb+srv://pipeblox_db_user:vWxgn7jStYq2xzQH@cluster0.1rnexaj.mongodb.net/sorteosos?retryWrites=true&w=majority";
 
-// Handle potential duplicate pattern typos in connection strings gracefully
-if (MONGODB_URI.includes("@cluster0.1rnexaj@cluster0.1rnexaj.mongodb.net")) {
-  MONGODB_URI = MONGODB_URI.replace("@cluster0.1rnexaj@cluster0.1rnexaj.mongodb.net", "@cluster0.1rnexaj.mongodb.net");
+export function sanitizeMongoUri(rawUri?: string): string {
+  let uri = (rawUri || "").trim();
+  // Remove quotes if wrapped in quotes
+  uri = uri.replace(/^["']|["']$/g, "").trim();
+
+  if (!uri) {
+    return DEFAULT_MONGO_URI;
+  }
+
+  // Handle potential missing protocol
+  if (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://")) {
+    if (uri.includes("@")) {
+      uri = "mongodb+srv://" + uri;
+    } else {
+      return DEFAULT_MONGO_URI;
+    }
+  }
+
+  // Fix duplicated protocol prefixes
+  uri = uri.replace(/^(mongodb\+srv:\/\/|mongodb:\/\/)+/g, (match) => {
+    return match.startsWith("mongodb+srv://") ? "mongodb+srv://" : "mongodb://";
+  });
+
+  // Handle duplicate pattern typos gracefully
+  if (uri.includes("@cluster0.1rnexaj@cluster0.1rnexaj.mongodb.net")) {
+    uri = uri.replace("@cluster0.1rnexaj@cluster0.1rnexaj.mongodb.net", "@cluster0.1rnexaj.mongodb.net");
+  }
+
+  return uri;
 }
+
+let MONGODB_URI = sanitizeMongoUri(process.env.MONGODB_URI || DEFAULT_MONGO_URI);
 
 let useLocalFile = true;
 
@@ -325,24 +352,36 @@ declare global {
   var _mongoosePromise: Promise<typeof mongoose> | undefined;
 }
 
-async function ensureConnected(): Promise<boolean> {
-  if (mongoose.connection.readyState === 1) {
+async function ensureConnected(force: boolean = false): Promise<boolean> {
+  if (!force && mongoose.connection.readyState === 1) {
     useLocalFile = false;
     return true;
   }
 
-  if (MONGODB_URI) {
-    if (!global._mongoosePromise) {
-      global._mongoosePromise = mongoose.connect(MONGODB_URI, {
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 8000
+  const uriToUse = sanitizeMongoUri(process.env.MONGODB_URI || MONGODB_URI || DEFAULT_MONGO_URI);
+
+  if (force) {
+    try {
+      await mongoose.disconnect();
+    } catch (_) {}
+    global._mongoosePromise = undefined;
+  }
+
+  if (uriToUse) {
+    if (!global._mongoosePromise || mongoose.connection.readyState === 0) {
+      global._mongoosePromise = mongoose.connect(uriToUse, {
+        dbName: process.env.MONGODB_DB_NAME || "sorteosos",
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
       }).then(async (m) => {
-        console.log("Successfully connected to MongoDB at SorteoSOS");
+        console.log("Successfully connected to MongoDB Atlas (database: sorteosos)");
         useLocalFile = false;
+        lastError = null;
         await seedMongo();
         return m;
       }).catch((err) => {
-        console.warn("MongoDB connection failed. Falling back to local file storage.", err);
+        console.warn("MongoDB connection failed. Falling back to local file storage.", err.message || err);
         useLocalFile = true;
         lastError = err.message || String(err);
         global._mongoosePromise = undefined;
@@ -684,13 +723,20 @@ export const db = {
   },
 
   async getMongoStatus() {
-    await ensureConnected();
+    const isConnected = await ensureConnected();
+    const uriToUse = process.env.MONGODB_URI || MONGODB_URI || DEFAULT_MONGO_URI;
     return {
-      connected: !useLocalFile,
-      mode: useLocalFile ? "Archivo Local JSON (sorteo_db.json)" : "MongoDB Atlas",
-      uri: MONGODB_URI ? MONGODB_URI.replace(/:([^@]+)@/, ":******@") : "Ninguna",
-      error: lastError
+      connected: isConnected && !useLocalFile,
+      readyState: mongoose.connection.readyState,
+      mode: (!useLocalFile && isConnected) ? "MongoDB Atlas" : "Archivo Local JSON (Modo Fallback)",
+      dbName: mongoose.connection.db?.databaseName || "sorteosos",
+      uri: uriToUse ? uriToUse.replace(/:([^@]+)@/, ":******@") : "Ninguna",
+      error: lastError,
+      isVercel
     };
+  },
+  async reconnect() {
+    return await ensureConnected(true);
   },
   ParticipantModel,
   StateModel
