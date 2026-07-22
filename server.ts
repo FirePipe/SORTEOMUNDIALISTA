@@ -138,75 +138,96 @@ async function startServer() {
 
   // Participants CRUD
   app.get("/api/participants", async (req, res) => {
-    const participants = await db.getParticipants();
-    res.json(participants);
+    try {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      const participants = await db.getParticipants();
+      res.json(participants);
+    } catch (e: any) {
+      console.error("Failed to fetch participants:", e);
+      res.status(500).json({ error: "Failed to fetch participants" });
+    }
   });
 
   app.post("/api/participants", authenticateToken, async (req: any, res: any) => {
-    const { nombre, apellido, equipo, area, pago, participa, medioPago, valor } = req.body;
-    if (!nombre || !apellido) {
-      return res.status(400).json({ error: "Nombre and apellido are required" });
+    try {
+      const { nombre, apellido, equipo, area, pago, participa, medioPago, valor } = req.body;
+      if (!nombre || !apellido) {
+        return res.status(400).json({ error: "Nombre and apellido are required" });
+      }
+
+      const newParticipant = await db.addParticipant({
+        nombre,
+        apellido,
+        equipo: equipo || "",
+        area: area || "",
+        pago: !!pago,
+        participa: participa !== false,
+        numeroAsignado: null,
+        medioPago: medioPago || "",
+        valor: Number(valor) || 0
+      });
+
+      await db.addLog({
+        accion: "CREACION_PARTICIPANTE",
+        detalles: `Se registró manualmente al participante: ${nombre} ${apellido}`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+
+      await broadcastParticipants();
+      await broadcastState();
+      res.status(201).json(newParticipant);
+    } catch (e: any) {
+      console.error("Failed to create participant:", e);
+      res.status(500).json({ error: "Failed to create participant" });
     }
-
-    const newParticipant = await db.addParticipant({
-      nombre,
-      apellido,
-      equipo: equipo || "",
-      area: area || "",
-      pago: !!pago,
-      participa: participa !== false,
-      numeroAsignado: null,
-      medioPago: medioPago || "",
-      valor: Number(valor) || 0
-    });
-
-    await db.addLog({
-      accion: "CREACION_PARTICIPANTE",
-      detalles: `Se registró manualmente al participante: ${nombre} ${apellido}`,
-      usuario: req.user.username,
-      ip: req.ip || "127.0.0.1"
-    });
-
-    await broadcastParticipants();
-    await broadcastState();
-    res.status(201).json(newParticipant);
   });
 
   app.put("/api/participants/:id", authenticateToken, async (req: any, res: any) => {
-    const { id } = req.params;
-    const update = req.body;
+    try {
+      const { id } = req.params;
+      const update = req.body;
 
-    const updated = await db.updateParticipant(id, update);
-    if (!updated) {
-      return res.status(404).json({ error: "Participant not found" });
+      const updated = await db.updateParticipant(id, update);
+      if (!updated) {
+        return res.status(404).json({ error: "Participant not found" });
+      }
+
+      await db.addLog({
+        accion: "EDICION_PARTICIPANTE",
+        detalles: `Se editó al participante ${updated.nombre} ${updated.apellido}`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+
+      await broadcastParticipants();
+      await broadcastState();
+      res.json(updated);
+    } catch (e: any) {
+      console.error("Failed to update participant:", e);
+      res.status(500).json({ error: "Failed to update participant" });
     }
-
-    await db.addLog({
-      accion: "EDICION_PARTICIPANTE",
-      detalles: `Se editó al participante ${updated.nombre} ${updated.apellido}`,
-      usuario: req.user.username,
-      ip: req.ip || "127.0.0.1"
-    });
-
-    await broadcastParticipants();
-    await broadcastState();
-    res.json(updated);
   });
 
   app.delete("/api/participants/:id", authenticateToken, async (req: any, res: any) => {
-    const { id } = req.params;
-    await db.deleteParticipant(id);
+    try {
+      const { id } = req.params;
+      await db.deleteParticipant(id);
 
-    await db.addLog({
-      accion: "ELIMINACION_PARTICIPANTE",
-      detalles: `Se eliminó al participante con ID: ${id}`,
-      usuario: req.user.username,
-      ip: req.ip || "127.0.0.1"
-    });
+      await db.addLog({
+        accion: "ELIMINACION_PARTICIPANTE",
+        detalles: `Se eliminó al participante con ID: ${id}`,
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
 
-    await broadcastParticipants();
-    await broadcastState();
-    res.json({ success: true });
+      await broadcastParticipants();
+      await broadcastState();
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("Failed to delete participant:", e);
+      res.status(500).json({ error: "Failed to delete participant" });
+    }
   });
 
   // Bulk Excel Import
@@ -282,8 +303,8 @@ async function startServer() {
       let st = await db.StateModel.findOne({});
       if (st) {
         const min = st.config?.rangoMin || 1;
-        const max = st.config?.rangoMax || 999;
-        const habilitar00 = st.config?.habilitar00 || false;
+        const max = st.config?.rangoMax || 99;
+        const habilitar00 = st.config?.habilitar00 ?? true;
         
         const newPool: string[] = [];
         if (habilitar00) newPool.push("00");
@@ -325,27 +346,44 @@ async function startServer() {
 
   // Get configuration
   app.get("/api/config", async (req, res) => {
-    const config = await db.getConfig();
-    res.json(config);
+    try {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      const config = await db.getConfig();
+      res.json(config);
+    } catch (e: any) {
+      console.error("Failed to fetch config:", e);
+      res.status(500).json({ error: "Failed to fetch config" });
+    }
   });
 
   // Update configuration
   app.put("/api/config", authenticateToken, async (req: any, res: any) => {
-    const updated = await db.updateConfig(req.body);
-    await db.addLog({
-      accion: "CONFIGURACION_MODIFICADA",
-      detalles: "Se actualizó la configuración general del evento",
-      usuario: req.user.username,
-      ip: req.ip || "127.0.0.1"
-    });
-    await broadcastState();
-    res.json(updated);
+    try {
+      const updated = await db.updateConfig(req.body);
+      await db.addLog({
+        accion: "CONFIGURACION_MODIFICADA",
+        detalles: "Se actualizó la configuración general del evento",
+        usuario: req.user.username,
+        ip: req.ip || "127.0.0.1"
+      });
+      await broadcastState();
+      res.json(updated);
+    } catch (e: any) {
+      console.error("Failed to update config:", e);
+      res.status(500).json({ error: "Failed to update config" });
+    }
   });
 
   // Get current event state
   app.get("/api/event/state", async (req, res) => {
-    const state = await db.getState();
-    res.json(state);
+    try {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      const state = await db.getState();
+      res.json(state);
+    } catch (e: any) {
+      console.error("Failed to fetch event state:", e);
+      res.status(500).json({ error: "Failed to fetch event state" });
+    }
   });
 
   // Get database connection status (MongoDB vs Local JSON fallback)
@@ -587,7 +625,7 @@ async function startServer() {
     
     // Validate range
     const min = parseInt(rangoMin) || 1;
-    const max = parseInt(rangoMax) || 999;
+    const max = parseInt(rangoMax) || 99;
     
     // Recalculate available numbers based on new range
     const newPool: string[] = [];
@@ -672,7 +710,7 @@ async function startServer() {
 
       if (withShow) {
         let countdown = 3;
-        const config = { ...(state.config || { rangoMin: 1, rangoMax: 999, habilitar00: false, modoShow: false, showCountdown: 0 }) };
+        const config = { ...(state.config || { rangoMin: 1, rangoMax: 99, habilitar00: true, modoShow: false, showCountdown: 0 }) };
         
         const runCountdown = async () => {
           if (countdown > 0) {

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Participant, EventState, AppConfig } from '../types';
 import { audio } from '../utils/audio';
+import WinnerCelebrationModal from './WinnerCelebrationModal';
 import { 
   Play, RotateCcw, Check, Sparkles, AlertCircle, 
   Settings, Volume2, VolumeX, Eye, ArrowRight, Activity, HelpCircle,
-  Pause, Clock, Database, Server, Wifi, WifiOff, RefreshCw, CheckCircle, Info
+  Pause, Clock, Database, Server, Wifi, WifiOff, RefreshCw, CheckCircle, Info, Trophy, Flame
 } from 'lucide-react';
 
 interface EventSectionProps {
@@ -48,6 +49,8 @@ export default function EventSection({
 
   // Drawing states
   const [isFlashing, setIsFlashing] = useState(false);
+  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [winnerModalData, setWinnerModalData] = useState<{ number: string; participant: Participant | null }>({ number: '', participant: null });
   const [rollSpeed, setRollSpeed] = useState(50); // Speed in ms
   const [seqPause, setSeqPause] = useState(2000); // Pause between steps in ms
   const [seqSpeedMode, setSeqSpeedMode] = useState<'show' | 'fast' | 'express'>('show'); // Speed mode preset
@@ -208,7 +211,7 @@ export default function EventSection({
       let isWaitingForAPI = true;
       const runDummyFlash = () => {
         if (!isWaitingForAPI) return;
-        const randomNum = Math.floor(Math.random() * 999).toString().padStart(3, '0');
+        const randomNum = Math.floor(Math.random() * 100).toString().padStart(2, '0');
         setFlashNumber(randomNum);
         if (appConfig.soundEnabled) audio.playTick(300);
         flashIntervalRef.current = setTimeout(runDummyFlash, rollSpeed);
@@ -255,6 +258,18 @@ export default function EventSection({
             }
             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
             setConfettiActive(true);
+
+            // Check if this number is the designated winning number
+            const targetWinner = eventState?.config?.numeroGanador;
+            if (targetWinner && String(chosenNumber).padStart(2, '0') === String(targetWinner).padStart(2, '0')) {
+              const currentP = participants.find(p => (p._id || p.id) === participantId) || null;
+              setWinnerModalData({
+                number: String(chosenNumber).padStart(2, '0'),
+                participant: currentP
+              });
+              setWinnerModalOpen(true);
+            }
+
             resolve(chosenNumber);
           }
         };
@@ -1213,6 +1228,14 @@ export default function EventSection({
           </div>
         </div>
       )}
+
+      {/* Winner Particle & Celebration Modal */}
+      <WinnerCelebrationModal
+        isOpen={winnerModalOpen}
+        onClose={() => setWinnerModalOpen(false)}
+        winnerNumber={winnerModalData.number}
+        participant={winnerModalData.participant}
+      />
     </div>
   );
 }

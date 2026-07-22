@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Participant, EventState, AppConfig } from '../types';
 import { audio } from '../utils/audio';
 import { useGoldenBallCelebration } from './useGoldenBallCelebration';
+import WinnerCelebrationModal from './WinnerCelebrationModal';
 import { 
   Shield, Sparkles, HelpCircle, CheckCircle, 
-  LayoutGrid, List, ArrowUpDown, Search, User, Hash, Calendar, Trophy, X
+  LayoutGrid, List, ArrowUpDown, Search, User, Hash, Calendar, Trophy, X, Flame
 } from 'lucide-react';
 
 // --- Sub-component: GoldenBall (Pure Tailwind 3D Sphere) ---
@@ -50,6 +51,8 @@ interface BoardSectionProps {
 
 export default function BoardSection({ participants, currentProposedNumber, eventState, appConfig }: BoardSectionProps) {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [winnerModalData, setWinnerModalData] = useState<{ number: string; participant: Participant | null }>({ number: '', participant: null });
   const { triggerCelebration } = useGoldenBallCelebration();
 
   // Safe helper to check if a participant's assigned number matches the event's winning number
@@ -57,6 +60,12 @@ export default function BoardSection({ participants, currentProposedNumber, even
     if (!p || !p.numeroAsignado || !eventState?.config?.numeroGanador) return false;
     return String(p.numeroAsignado).padStart(2, '0') === String(eventState.config.numeroGanador).padStart(2, '0');
   }, [eventState?.config?.numeroGanador]);
+
+  const openCelebrationModal = (num: string, p: Participant | null) => {
+    setWinnerModalData({ number: num, participant: p });
+    setWinnerModalOpen(true);
+    triggerCelebration();
+  };
   const [viewMode, setViewMode] = useState<'tablero' | 'lista'>('tablero');
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a' | 'num'>('num');
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,7 +101,7 @@ export default function BoardSection({ participants, currentProposedNumber, even
 
   // Generate numbers based on config
   const numbers = React.useMemo(() => {
-    const config = eventState?.config || { rangoMin: 1, rangoMax: 999, habilitar00: true };
+    const config = eventState?.config || { rangoMin: 1, rangoMax: 99, habilitar00: true };
     const list: string[] = [];
     
     if (config.habilitar00) {
@@ -302,14 +311,14 @@ export default function BoardSection({ participants, currentProposedNumber, even
                           <GoldenBall
                             isWinner={isGoldenWinner} 
                             numero={num} 
-                            onClick={isAssigned ? () => {
+                            onClick={() => {
                               if (isGoldenWinner) {
-                                triggerCelebration();
-                              } else {
+                                openCelebrationModal(num, assignedParticipant || null);
+                              } else if (isAssigned) {
                                 audio.playSoftClick();
+                                setSelectedParticipant(assignedParticipant);
                               }
-                              setSelectedParticipant(assignedParticipant);
-                            } : undefined} 
+                            }} 
                           />
                           
                           {/* Hover Tooltip - Name & Surname in Uppercase */}
@@ -467,11 +476,23 @@ export default function BoardSection({ participants, currentProposedNumber, even
                         </div>
                       </div>
 
-                      {/* Footer Badge */}
-                      <div className="mt-auto pt-6 w-full flex justify-center">
-                         <div className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-600 to-amber-400 rounded-full text-slate-950 font-black text-[10px] shadow-lg">
-                           SORTEOSOS 2026 OFFICIAL CARD
-                         </div>
+                      {/* Footer Badge or Celebration Button */}
+                      <div className="mt-auto pt-6 w-full flex flex-col items-center gap-2">
+                        {isGoldenWinnerParticipant(selectedParticipant) && (
+                          <button
+                            onClick={() => {
+                              const num = selectedParticipant?.numeroAsignado ? String(selectedParticipant.numeroAsignado).padStart(2, '0') : '';
+                              openCelebrationModal(num, selectedParticipant);
+                            }}
+                            className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.6)] hover:scale-105 transition-all flex items-center justify-center gap-2 cursor-pointer uppercase"
+                          >
+                            <Flame className="w-4 h-4 text-slate-950 animate-bounce" />
+                            <span>¡Ver Celebración Ganadora! 🎆</span>
+                          </button>
+                        )}
+                        <div className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-600 to-amber-400 rounded-full text-slate-950 font-black text-[10px] shadow-lg">
+                          SORTEOSOS 2026 OFFICIAL CARD
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -563,6 +584,14 @@ export default function BoardSection({ participants, currentProposedNumber, even
           </div>
         )}
       </div>
+
+      {/* Winner Particle & Celebration Modal */}
+      <WinnerCelebrationModal
+        isOpen={winnerModalOpen}
+        onClose={() => setWinnerModalOpen(false)}
+        winnerNumber={winnerModalData.number}
+        participant={winnerModalData.participant}
+      />
     </div>
   );
 }

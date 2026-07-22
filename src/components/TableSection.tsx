@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Participant } from '../types';
+import { Participant, EventState } from '../types';
+import WinnerCelebrationModal from './WinnerCelebrationModal';
 import { 
   Search, Filter, Plus, FileSpreadsheet, Download, 
-  Edit2, Trash2, Check, X, AlertCircle, Sparkles, DollarSign 
+  Edit2, Trash2, Check, X, AlertCircle, Sparkles, DollarSign, Trophy, Flame 
 } from 'lucide-react';
 
 interface TableSectionProps {
   participants: Participant[];
+  eventState?: EventState;
   onAddParticipant: (p: Omit<Participant, '_id' | 'id'>) => Promise<void>;
   onEditParticipant: (id: string, p: Partial<Participant>) => Promise<void>;
   onDeleteParticipant: (id: string) => Promise<void>;
@@ -16,6 +18,7 @@ interface TableSectionProps {
 
 export default function TableSection({
   participants,
+  eventState,
   onAddParticipant,
   onEditParticipant,
   onDeleteParticipant,
@@ -25,6 +28,8 @@ export default function TableSection({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPayment, setFilterPayment] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
   const [filterAssigned, setFilterAssigned] = useState<'ALL' | 'ASSIGNED' | 'UNASSIGNED'>('ALL');
+  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [winnerModalData, setWinnerModalData] = useState<{ number: string; participant: Participant | null }>({ number: '', participant: null });
   
   // Form States
   const [isAdding, setIsAdding] = useState(false);
@@ -409,9 +414,18 @@ export default function TableSection({
                 filteredParticipants.map((p) => {
                   const id = p._id || p.id || '';
                   const isEditing = editingId === id;
+                  const isWinner = p.numeroAsignado && eventState?.config?.numeroGanador && 
+                    String(p.numeroAsignado).padStart(2, '0') === String(eventState.config.numeroGanador).padStart(2, '0');
 
                   return (
-                    <tr key={id} className="hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors">
+                    <tr 
+                      key={id} 
+                      className={`transition-colors ${
+                        isWinner 
+                          ? 'bg-gradient-to-r from-amber-500/20 via-yellow-400/10 to-amber-500/20 dark:from-amber-500/30 dark:via-yellow-500/15 dark:to-amber-500/30 border-l-4 border-amber-400 font-semibold' 
+                          : 'hover:bg-blue-50/50 dark:hover:bg-blue-500/5'
+                      }`}
+                    >
                       {/* Name / Surname */}
                       <td className="py-3 px-6">
                         {isEditing ? (
@@ -430,9 +444,17 @@ export default function TableSection({
                             />
                           </div>
                         ) : (
-                          <span className="font-bold text-slate-800 dark:text-white">
-                            {p.nombre} {p.apellido}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold ${isWinner ? 'text-amber-600 dark:text-amber-300' : 'text-slate-800 dark:text-white'}`}>
+                              {p.nombre} {p.apellido}
+                            </span>
+                            {isWinner && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 shadow-[0_0_12px_rgba(245,158,11,0.5)]">
+                                <Trophy className="w-3 h-3 text-slate-950" />
+                                GANADOR
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
 
@@ -522,9 +544,31 @@ export default function TableSection({
                       {/* Assigned Number */}
                       <td className="py-3 px-4 text-center">
                         {p.numeroAsignado ? (
-                          <span className="font-mono bg-amber-50 dark:bg-[#1C160B] border border-amber-500/20 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 font-bold px-2.5 py-1 rounded shadow-inner">
-                            {p.numeroAsignado.padStart(2, '0')}
-                          </span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`font-mono font-bold px-2.5 py-1 rounded shadow-inner ${
+                              isWinner 
+                                ? 'bg-amber-400 text-slate-950 border border-yellow-200 animate-pulse' 
+                                : 'bg-amber-50 dark:bg-[#1C160B] border border-amber-500/20 dark:border-amber-500/30 text-amber-700 dark:text-amber-400'
+                            }`}>
+                              {p.numeroAsignado.padStart(2, '0')}
+                            </span>
+                            {isWinner && (
+                              <button
+                                onClick={() => {
+                                  setWinnerModalData({
+                                    number: p.numeroAsignado ? p.numeroAsignado.padStart(2, '0') : '',
+                                    participant: p
+                                  });
+                                  setWinnerModalOpen(true);
+                                }}
+                                className="px-2 py-1 bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-[10px] rounded hover:scale-110 transition-transform shadow-md flex items-center gap-1 cursor-pointer"
+                                title="Ver Celebración"
+                              >
+                                <Flame className="w-3 h-3 text-slate-950" />
+                                <span>🎆 Celebrar</span>
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-400 dark:text-gray-600 font-mono">-</span>
                         )}
@@ -593,6 +637,14 @@ export default function TableSection({
           </table>
         </div>
       </div>
+
+      {/* Winner Particle Celebration Modal */}
+      <WinnerCelebrationModal
+        isOpen={winnerModalOpen}
+        onClose={() => setWinnerModalOpen(false)}
+        winnerNumber={winnerModalData.number}
+        participant={winnerModalData.participant}
+      />
     </div>
   );
 }

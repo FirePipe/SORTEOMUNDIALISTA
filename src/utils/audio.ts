@@ -189,35 +189,35 @@ class AudioEngine {
     }
   }
 
-  // Festive golden chime/fanfare sequence - Emotive and Lush
+  // Festive golden chime/fanfare sequence - Emotive, Crisp and Triumphant
   playSuccessFanfare() {
     try {
       const ctx = this.initCtx();
       const now = ctx.currentTime;
 
-      // Celestial Major Progression
+      // Celestial Major Arpeggio Sequence
       const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
       
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        const delay = idx * 0.08;
+        const delay = idx * 0.07;
 
-        osc.type = 'sine';
+        osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
         osc.frequency.setValueAtTime(freq, now + delay);
         
         // Add a bit of shimmering vibrato
         const vibrato = ctx.createOscillator();
         const vibratoGain = ctx.createGain();
-        vibrato.frequency.setValueAtTime(6 + idx, now + delay);
-        vibratoGain.gain.setValueAtTime(4, now + delay);
+        vibrato.frequency.setValueAtTime(7 + idx, now + delay);
+        vibratoGain.gain.setValueAtTime(5, now + delay);
         
         vibrato.connect(vibratoGain);
         vibratoGain.connect(osc.frequency);
         
         gain.gain.setValueAtTime(0, now + delay);
-        gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 1.5);
+        gain.gain.linearRampToValueAtTime(0.2, now + delay + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 1.4);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -225,8 +225,27 @@ class AudioEngine {
         vibrato.start(now + delay);
         osc.start(now + delay);
         
-        vibrato.stop(now + delay + 1.5);
-        osc.stop(now + delay + 1.5);
+        vibrato.stop(now + delay + 1.4);
+        osc.stop(now + delay + 1.4);
+      });
+
+      // Triumphant chord blast at 0.5s for rich sound
+      const chordDelay = 0.5;
+      const chord = [523.25, 659.25, 783.99, 1046.50, 1318.51]; // C5, E5, G5, C6, E6
+      chord.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + chordDelay);
+        
+        gain.gain.setValueAtTime(0, now + chordDelay);
+        gain.gain.linearRampToValueAtTime(0.12 / (i + 1), now + chordDelay + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + chordDelay + 1.8);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + chordDelay);
+        osc.stop(now + chordDelay + 1.8);
       });
     } catch (e) {
       console.warn('Audio play fanfare error:', e);

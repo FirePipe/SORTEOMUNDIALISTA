@@ -162,13 +162,13 @@ class LocalStore {
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: ["00", ...Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"))],
         numerosAsignados: [],
         descartadosEnEsteIntento: [],
         config: {
           rangoMin: 1,
-          rangoMax: 999,
-          habilitar00: false,
+          rangoMax: 99,
+          habilitar00: true,
           modoShow: false,
           showCountdown: 0
         }
@@ -182,12 +182,14 @@ class LocalStore {
     };
     this.load();
     
-    // Periodically save if dirty to reduce write frequency during fast animations
-    setInterval(() => {
-      if (this.isDirty) {
-        this.save();
-      }
-    }, 2000);
+    // Periodically save if dirty to reduce write frequency during fast animations (only in standalone mode)
+    if (!isVercel) {
+      setInterval(() => {
+        if (this.isDirty) {
+          this.save();
+        }
+      }, 2000);
+    }
   }
 
   private load() {
@@ -222,6 +224,7 @@ class LocalStore {
     const newUser = { _id: Date.now().toString(), ...user };
     this.data.usuarios.push(newUser);
     this.isDirty = true;
+    if (isVercel) this.save();
     return newUser;
   }
 
@@ -229,12 +232,14 @@ class LocalStore {
   setParticipants(list: any[]) {
     this.data.participantes = list;
     this.isDirty = true;
+    if (isVercel) this.save();
   }
   updateParticipant(id: string, update: any) {
     const idx = this.data.participantes.findIndex(p => p._id === id || p.id === id);
     if (idx !== -1) {
       this.data.participantes[idx] = { ...this.data.participantes[idx], ...update };
       this.isDirty = true;
+      if (isVercel) this.save();
       return this.data.participantes[idx];
     }
     return null;
@@ -243,11 +248,13 @@ class LocalStore {
     const newP = { _id: "p-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4), ...p };
     this.data.participantes.push(newP);
     this.isDirty = true;
+    if (isVercel) this.save();
     return newP;
   }
   deleteParticipant(id: string) {
     this.data.participantes = this.data.participantes.filter(p => p._id !== id && p.id !== id);
     this.isDirty = true;
+    if (isVercel) this.save();
   }
 
   getLogs() { return this.data.logs; }
@@ -255,17 +262,20 @@ class LocalStore {
     const newLog = { _id: "log-" + Date.now(), fecha: new Date().toISOString(), ...log };
     this.data.logs.unshift(newLog); // newest first
     this.isDirty = true;
+    if (isVercel) this.save();
     return newLog;
   }
   clearLogs() {
     this.data.logs = [];
     this.isDirty = true;
+    if (isVercel) this.save();
   }
 
   getState() { return this.data.state; }
   updateState(update: Partial<IState>) {
     this.data.state = { ...this.data.state, ...update };
     this.isDirty = true;
+    if (isVercel) this.save();
     return this.data.state;
   }
 
@@ -273,6 +283,7 @@ class LocalStore {
   updateConfig(update: Partial<IConfig>) {
     this.data.config = { ...this.data.config, ...update };
     this.isDirty = true;
+    if (isVercel) this.save();
     return this.data.config;
   }
 
@@ -284,8 +295,8 @@ class LocalStore {
     }));
     
     const min = this.data.state.config?.rangoMin || 1;
-    const max = this.data.state.config?.rangoMax || 999;
-    const habilitar00 = this.data.state.config?.habilitar00 || false;
+    const max = this.data.state.config?.rangoMax || 99;
+    const habilitar00 = this.data.state.config?.habilitar00 ?? true;
     
     const newPool: string[] = [];
     if (habilitar00) newPool.push("00");
@@ -303,21 +314,53 @@ class LocalStore {
       descartadosEnEsteIntento: []
     };
     this.isDirty = true;
+    if (isVercel) this.save();
   }
 }
 
 const localStore = new LocalStore();
 let lastError: string | null = null;
 
-let connectionPromise: Promise<void> | null = null;
+declare global {
+  var _mongoosePromise: Promise<typeof mongoose> | undefined;
+}
 
-async function ensureConnected() {
-  if (connectionPromise) {
-    try {
-      await connectionPromise;
-    } catch (err) {
-      // Ignore errors here to allow useLocalFile fallback to work gracefully
+async function ensureConnected(): Promise<boolean> {
+  if (mongoose.connection.readyState === 1) {
+    useLocalFile = false;
+    return true;
+  }
+
+  if (MONGODB_URI) {
+    if (!global._mongoosePromise) {
+      global._mongoosePromise = mongoose.connect(MONGODB_URI, {
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000
+      }).then(async (m) => {
+        console.log("Successfully connected to MongoDB at SorteoSOS");
+        useLocalFile = false;
+        await seedMongo();
+        return m;
+      }).catch((err) => {
+        console.warn("MongoDB connection failed. Falling back to local file storage.", err);
+        useLocalFile = true;
+        lastError = err.message || String(err);
+        global._mongoosePromise = undefined;
+        throw err;
+      });
     }
+
+    try {
+      await global._mongoosePromise;
+      useLocalFile = false;
+      return true;
+    } catch (err) {
+      useLocalFile = true;
+      return false;
+    }
+  } else {
+    useLocalFile = true;
+    return false;
   }
 }
 
@@ -358,8 +401,8 @@ const StateSchema = new mongoose.Schema({
   descartadosEnEsteIntento: { type: [String], default: [] },
   config: {
     rangoMin: { type: Number, default: 1 },
-    rangoMax: { type: Number, default: 999 },
-    habilitar00: { type: Boolean, default: false },
+    rangoMax: { type: Number, default: 99 },
+    habilitar00: { type: Boolean, default: true },
     modoShow: { type: Boolean, default: false },
     showCountdown: { type: Number, default: 0 },
     habilitarBalonOro: { type: Boolean, default: false },
@@ -384,19 +427,20 @@ const ConfigModel = mongoose.model("configuracion", ConfigSchema);
 async function seedMongo() {
   if (useLocalFile) return;
   try {
-    // Ensure both specific admins are seeded in MongoDB and legacy one is cleaned
-    await UserModel.deleteMany({ username: { $in: ["admin", "admin@sos.com.co", "mundialsorteo@sos.com.co"] } });
-    await UserModel.create([
-      {
-        username: "admin@sos.com.co",
-        passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
-      },
-      {
-        username: "mundialsorteo@sos.com.co",
-        passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
-      }
-    ]);
-    console.log("Admin accounts successfully seeded to MongoDB");
+    const userCount = await UserModel.countDocuments();
+    if (userCount === 0) {
+      await UserModel.create([
+        {
+          username: "admin@sos.com.co",
+          passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
+        },
+        {
+          username: "mundialsorteo@sos.com.co",
+          passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
+        }
+      ]);
+      console.log("Admin accounts successfully seeded to MongoDB");
+    }
     const configCount = await ConfigModel.countDocuments();
     if (configCount === 0) {
       await ConfigModel.create({
@@ -408,17 +452,18 @@ async function seedMongo() {
     }
     const stateCount = await StateModel.countDocuments();
     if (stateCount === 0) {
+      const defaultPool = ["00", ...Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"))];
       await StateModel.create({
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: defaultPool,
         numerosAsignados: [],
         descartadosEnEsteIntento: [],
         config: {
           rangoMin: 1,
-          rangoMax: 999,
-          habilitar00: false,
+          rangoMax: 99,
+          habilitar00: true,
           modoShow: false,
           showCountdown: 0
         }
@@ -434,24 +479,10 @@ async function seedMongo() {
   }
 }
 
-// Try to initialize MongoDB connection if requested with fast fail-safe timeouts (2.5 seconds)
+// Kick off connection eagerly
 if (MONGODB_URI) {
-  connectionPromise = mongoose.connect(MONGODB_URI, {
-    serverSelectionTimeoutMS: 2500, // Timeout for finding/selecting the cluster
-    connectTimeoutMS: 2500          // Timeout for the initial socket connection
-  })
-    .then(async () => {
-      console.log("Successfully connected to MongoDB at SorteoSOS");
-      useLocalFile = false;
-      await seedMongo();
-    })
-    .catch((err) => {
-      console.warn("MongoDB connection failed. Falling back to local file storage.", err);
-      useLocalFile = true;
-      lastError = err.message || String(err);
-    });
+  ensureConnected().catch(() => {});
 } else {
-  console.log("No MONGODB_URI environment variable detected. Using local file storage.");
   useLocalFile = true;
 }
 
@@ -548,21 +579,27 @@ export const db = {
     
     let st = await StateModel.findOne({});
     if (!st) {
+      const defaultPool = ["00", ...Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"))];
       st = await StateModel.create({
         estado: "LISTO",
         participanteActualId: null,
         numeroPropuesto: null,
-        numerosDisponibles: Array.from({ length: 999 }, (_, i) => String(i + 1).padStart(2, "0")),
+        numerosDisponibles: defaultPool,
         numerosAsignados: [],
         descartadosEnEsteIntento: [],
         config: {
           rangoMin: 1,
-          rangoMax: 999,
-          habilitar00: false,
+          rangoMax: 99,
+          habilitar00: true,
           modoShow: false,
           showCountdown: 0
         }
       });
+    } else if (st.config && st.config.rangoMax === 999) {
+      // Automatic fix for legacy default 999 in database: reset to 99 for standard 00-99 board
+      st.config.rangoMax = 99;
+      if (st.config.habilitar00 === undefined) st.config.habilitar00 = true;
+      await StateModel.updateOne({ _id: st._id }, { $set: { "config.rangoMax": 99, "config.habilitar00": true } });
     }
     return st;
   },
