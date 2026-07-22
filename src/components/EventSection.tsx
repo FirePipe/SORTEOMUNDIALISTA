@@ -1230,12 +1230,14 @@ export default function EventSection({
       )}
 
       {/* Winner Particle & Celebration Modal */}
-      <WinnerCelebrationModal
-        isOpen={winnerModalOpen}
-        onClose={() => setWinnerModalOpen(false)}
-        winnerNumber={winnerModalData.number}
-        participant={winnerModalData.participant}
-      />
+      {winnerModalOpen && (
+        <WinnerCelebrationModal
+          isOpen={winnerModalOpen}
+          onClose={() => setWinnerModalOpen(false)}
+          winnerNumber={winnerModalData.number}
+          participant={winnerModalData.participant}
+        />
+      )}
     </div>
   );
 }

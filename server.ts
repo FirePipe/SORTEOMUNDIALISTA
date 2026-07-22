@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import crypto from "crypto";
 import ExcelJS from "exceljs";
-import { db } from "./server_db.js";
+import { db } from "./server_db";
 
 let _filename = "";
 let _dirname = "";
