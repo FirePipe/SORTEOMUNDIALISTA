@@ -5,40 +5,20 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     build: {
-      chunkSizeWarningLimit: 1000,
-      minify: 'esbuild',
+      outDir: 'dist',
+      assetsDir: 'assets',
+      emptyOutDir: true,
+      chunkSizeWarningLimit: 1600,
+      minify: true,
       cssMinify: true,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react';
-              }
-              if (id.includes('lucide-react')) {
-                return 'vendor-icons';
-              }
-              if (id.includes('motion')) {
-                return 'vendor-motion';
-              }
-              if (id.includes('exceljs')) {
-                return 'vendor-excel';
-              }
-              if (id.includes('socket.io')) {
-                return 'vendor-socket';
-              }
-              return 'vendor-others';
-            }
-          }
-        }
-      }
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
