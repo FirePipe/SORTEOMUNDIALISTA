@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import crypto from "crypto";
 import ExcelJS from "exceljs";
-import { db } from "./server_db";
+import { db } from "./server_db.js";
 
 let _filename = "";
 let _dirname = "";
@@ -966,15 +966,19 @@ async function startServer() {
     });
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
+  // Vite middleware for local development only
+  if (!process.env.VERCEL && process.env.NODE_ENV !== "production") {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("Vite middleware not available:", e);
+    }
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
