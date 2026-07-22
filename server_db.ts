@@ -371,9 +371,11 @@ async function ensureConnected(force: boolean = false): Promise<boolean> {
     if (!global._mongoosePromise || mongoose.connection.readyState === 0) {
       global._mongoosePromise = mongoose.connect(uriToUse, {
         dbName: process.env.MONGODB_DB_NAME || "sorteosos",
-        serverSelectionTimeoutMS: 15000,
-        connectTimeoutMS: 15000,
-        socketTimeoutMS: 45000,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+        socketTimeoutMS: 30000,
+        maxPoolSize: 10,
+        minPoolSize: 0,
       }).then(async (m) => {
         console.log("Successfully connected to MongoDB Atlas (database: sorteosos)");
         useLocalFile = false;
@@ -462,9 +464,11 @@ const LogModel = mongoose.model("historial", LogSchema);
 const StateModel = mongoose.model("eventos", StateSchema);
 const ConfigModel = mongoose.model("configuracion", ConfigSchema);
 
+let isSeeded = false;
+
 // Initial setup helper for Mongo
 async function seedMongo() {
-  if (useLocalFile) return;
+  if (useLocalFile || isSeeded) return;
   try {
     const defaultPasswordHash = crypto.createHash("sha256").update("FiebreMundial2026").digest("hex");
     
@@ -516,6 +520,8 @@ async function seedMongo() {
       await ParticipantModel.insertMany(SEED_PARTICIPANTS);
       console.log("Seeded 52 participants into MongoDB collection 'participantes_no_relacional'");
     }
+
+    isSeeded = true;
   } catch (e) {
     console.error("Error seeding MongoDB:", e);
   }
@@ -542,13 +548,13 @@ export const db = {
   async getUsers() {
     await ensureConnected();
     if (useLocalFile) return localStore.getUsers();
-    return await UserModel.find({});
+    return await UserModel.find({}).lean();
   },
 
   async findUser(username: string) {
     await ensureConnected();
     if (useLocalFile) return localStore.getUsers().find(u => u.username === username);
-    return await UserModel.findOne({ username });
+    return await UserModel.findOne({ username }).lean();
   },
 
   async createUser(user: any) {
@@ -561,7 +567,7 @@ export const db = {
     await ensureConnected();
     if (useLocalFile) return localStore.getParticipants();
     
-    return await ParticipantModel.find({});
+    return await ParticipantModel.find({}).lean();
   },
 
   async addParticipant(p: any) {
@@ -600,7 +606,7 @@ export const db = {
   async getLogs() {
     await ensureConnected();
     if (useLocalFile) return localStore.getLogs();
-    return await LogModel.find({}).sort({ fecha: -1 });
+    return await LogModel.find({}).sort({ fecha: -1 }).limit(200).lean();
   },
 
   async addLog(log: any) {
@@ -619,7 +625,7 @@ export const db = {
     await ensureConnected();
     if (useLocalFile) return localStore.getState();
     
-    let st = await StateModel.findOne({});
+    let st = await StateModel.findOne({}).lean();
     if (!st) {
       const defaultPool = ["00", ...Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"))];
       st = await StateModel.create({
@@ -638,7 +644,6 @@ export const db = {
         }
       });
     } else if (st.config && st.config.rangoMax === 999) {
-      // Automatic fix for legacy default 999 in database: reset to 99 for standard 00-99 board
       st.config.rangoMax = 99;
       if (st.config.habilitar00 === undefined) st.config.habilitar00 = true;
       await StateModel.updateOne({ _id: st._id }, { $set: { "config.rangoMax": 99, "config.habilitar00": true } });
@@ -650,20 +655,14 @@ export const db = {
     await ensureConnected();
     cacheState = null; // Invalidate
     if (useLocalFile) return localStore.updateState(update);
-    let st = await StateModel.findOne({});
-    if (!st) {
-      return await StateModel.create(update);
-    }
-    Object.assign(st, update);
-    await st.save();
-    return st;
+    return await StateModel.findOneAndUpdate({}, { $set: update }, { new: true, upsert: true }).lean();
   },
 
   async getConfig() {
     await ensureConnected();
     if (useLocalFile) return localStore.getConfig();
 
-    let cfg = await ConfigModel.findOne({});
+    let cfg = await ConfigModel.findOne({}).lean();
     if (!cfg) {
       cfg = await ConfigModel.create({
         soundEnabled: true,
@@ -679,13 +678,7 @@ export const db = {
     await ensureConnected();
     cacheConfig = null; // Invalidate
     if (useLocalFile) return localStore.updateConfig(update);
-    let cfg = await ConfigModel.findOne({});
-    if (!cfg) {
-      return await ConfigModel.create(update);
-    }
-    Object.assign(cfg, update);
-    await cfg.save();
-    return cfg;
+    return await ConfigModel.findOneAndUpdate({}, { $set: update }, { new: true, upsert: true }).lean();
   },
 
   async resetAll() {
