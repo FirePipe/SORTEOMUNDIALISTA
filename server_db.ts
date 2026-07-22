@@ -371,8 +371,8 @@ async function ensureConnected(force: boolean = false): Promise<boolean> {
     if (!global._mongoosePromise || mongoose.connection.readyState === 0) {
       global._mongoosePromise = mongoose.connect(uriToUse, {
         dbName: process.env.MONGODB_DB_NAME || "sorteosos",
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 15000,
+        connectTimeoutMS: 15000,
         socketTimeoutMS: 45000,
       }).then(async (m) => {
         console.log("Successfully connected to MongoDB Atlas (database: sorteosos)");
