@@ -466,20 +466,21 @@ const ConfigModel = mongoose.model("configuracion", ConfigSchema);
 async function seedMongo() {
   if (useLocalFile) return;
   try {
-    const userCount = await UserModel.countDocuments();
-    if (userCount === 0) {
-      await UserModel.create([
-        {
-          username: "admin@sos.com.co",
-          passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
-        },
-        {
-          username: "mundialsorteo@sos.com.co",
-          passwordHash: crypto.createHash("sha256").update("FiebreMundial2026").digest("hex")
-        }
-      ]);
-      console.log("Admin accounts successfully seeded to MongoDB");
-    }
+    const defaultPasswordHash = crypto.createHash("sha256").update("FiebreMundial2026").digest("hex");
+    
+    // Ensure both required admin accounts are always seeded/upserted in MongoDB
+    await UserModel.findOneAndUpdate(
+      { username: "admin@sos.com.co" },
+      { username: "admin@sos.com.co", passwordHash: defaultPasswordHash },
+      { upsert: true, new: true }
+    );
+    await UserModel.findOneAndUpdate(
+      { username: "mundialsorteo@sos.com.co" },
+      { username: "mundialsorteo@sos.com.co", passwordHash: defaultPasswordHash },
+      { upsert: true, new: true }
+    );
+    console.log("Admin accounts (admin@sos.com.co & mundialsorteo@sos.com.co) verified in MongoDB");
+
     const configCount = await ConfigModel.countDocuments();
     if (configCount === 0) {
       await ConfigModel.create({
@@ -489,6 +490,7 @@ async function seedMongo() {
         nombreEvento: "Sorteo Oficial de Números SorteoSOS"
       });
     }
+
     const stateCount = await StateModel.countDocuments();
     if (stateCount === 0) {
       const defaultPool = ["00", ...Array.from({ length: 99 }, (_, i) => String(i + 1).padStart(2, "0"))];
@@ -508,10 +510,11 @@ async function seedMongo() {
         }
       });
     }
+
     const participantCount = await ParticipantModel.countDocuments();
     if (participantCount === 0) {
       await ParticipantModel.insertMany(SEED_PARTICIPANTS);
-      console.log("Seeded 52 participants into MongoDB");
+      console.log("Seeded 52 participants into MongoDB collection 'participantes_no_relacional'");
     }
   } catch (e) {
     console.error("Error seeding MongoDB:", e);
